@@ -133,10 +133,17 @@
   }
   #new-file-btn:hover { color: var(--text); background: var(--border); }
 
-  /* Chat area */
+  /* Chat area — content hugs bottom like real terminal */
   #chat {
     flex: 1;
     overflow-y: auto;
+  }
+
+  #chat-inner {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
     padding: 16px 20px;
   }
 
@@ -392,6 +399,70 @@
   .status-dot.active { background: var(--green); }
   .status-dot.paused { background: var(--amber); }
   .status-dot.idle { background: var(--text-muted); }
+
+  /* Task list widget */
+  .task-list-widget {
+    margin: 8px 0;
+    font-size: 13px;
+  }
+
+  .task-list-header {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 2px 0;
+  }
+
+  .task-list-header .task-header-icon {
+    color: var(--amber);
+  }
+
+  .task-list-header .task-header-text {
+    color: var(--amber);
+    font-weight: 700;
+  }
+
+  .task-list-header .task-header-meta {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .task-list-items {
+    margin-left: 14px;
+    border-left: 1px solid var(--border);
+    padding-left: 10px;
+  }
+
+  .task-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 1px 0;
+  }
+
+  .task-item .task-check {
+    font-size: 12px;
+    width: 14px;
+    flex-shrink: 0;
+  }
+
+  .task-item.pending .task-check { color: var(--white); }
+  .task-item.in-progress .task-check { color: var(--amber); }
+  .task-item.completed .task-check { color: var(--green); }
+
+  .task-item.completed .task-subject {
+    color: var(--text-muted);
+    text-decoration: line-through;
+  }
+
+  .task-item.pending .task-subject { color: var(--white); }
+  .task-item.in-progress .task-subject { color: var(--text); }
+
+  .task-overflow {
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 2px 0;
+  }
 </style>
 </head>
 <body>
@@ -426,7 +497,7 @@
     <button id="new-file-btn">New file</button>
   </div>
 
-  <div id="chat"></div>
+  <div id="chat"><div id="chat-inner"></div></div>
 
   <div id="status-bar">
     <div class="status-item">
@@ -644,8 +715,94 @@ function getToolCommand(tool) {
   return JSON.stringify(input, null, 2);
 }
 
+// --- Task tracking ---
+const taskState = new Map(); // "1" -> {subject, status, activeForm}
+let taskCounter = 0;
+let taskListEl = null;
+
+function isTaskTool(name) {
+  return ['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet'].includes(name);
+}
+
+function handleTaskTool(block) {
+  const input = block.input || {};
+
+  if (block.name === 'TaskCreate') {
+    taskCounter++;
+    const id = String(taskCounter);
+    taskState.set(id, {
+      subject: input.subject || 'Untitled',
+      status: 'pending',
+      activeForm: input.activeForm || ''
+    });
+  } else if (block.name === 'TaskUpdate') {
+    const id = input.taskId;
+    if (taskState.has(id)) {
+      const task = taskState.get(id);
+      if (input.status === 'deleted') {
+        taskState.delete(id);
+      } else {
+        if (input.status) task.status = input.status;
+        if (input.subject) task.subject = input.subject;
+      }
+    }
+  }
+  // TaskList / TaskGet: just re-render the widget
+
+  renderTaskList();
+}
+
+function renderTaskList() {
+  if (taskState.size === 0) return;
+
+  if (!taskListEl) {
+    taskListEl = document.createElement('div');
+    taskListEl.className = 'task-list-widget';
+    chatInner.appendChild(taskListEl);
+  }
+
+  const tasks = Array.from(taskState.values());
+  const pending = tasks.filter(t => t.status === 'pending' || t.status === 'in_progress');
+  const completed = tasks.filter(t => t.status === 'completed');
+
+  // Find active task for header
+  const active = tasks.find(t => t.status === 'in_progress');
+  const headerText = active?.activeForm || active?.subject || '';
+
+  let html = '';
+  if (headerText) {
+    html += `<div class="task-list-header"><span class="task-header-icon">✱</span> <span class="task-header-text">${escHtml(headerText)}</span></div>`;
+  }
+  html += '<div class="task-list-items">';
+
+  // Show pending/in-progress first
+  for (const t of pending) {
+    const icon = t.status === 'in_progress' ? '◐' : '□';
+    const cls = t.status === 'in_progress' ? 'in-progress' : 'pending';
+    html += `<div class="task-item ${cls}"><span class="task-check">${icon}</span><span class="task-subject">${escHtml(t.subject)}</span></div>`;
+  }
+
+  // Show completed (collapse if many)
+  const SHOW_MAX = 8;
+  const visible = completed.slice(0, SHOW_MAX);
+  const hidden = completed.length - SHOW_MAX;
+
+  for (const t of visible) {
+    html += `<div class="task-item completed"><span class="task-check">✓</span><span class="task-subject">${escHtml(t.subject)}</span></div>`;
+  }
+
+  if (hidden > 0) {
+    html += `<div class="task-overflow">… +${hidden} completed</div>`;
+  }
+
+  html += '</div>';
+  taskListEl.innerHTML = html;
+  chat.scrollTop = chat.scrollHeight;
+}
+
 // --- Playback ---
 const chat = document.getElementById('chat');
+const chatInner = document.getElementById('chat-inner');
 const progressFill = document.getElementById('progress-fill');
 const msgCounter = document.getElementById('msg-counter');
 const statusDot = document.getElementById('status-dot');
@@ -690,7 +847,7 @@ async function showMessage(index) {
 
     el.appendChild(prompt);
     el.appendChild(textSpan);
-    chat.appendChild(el);
+    chatInner.appendChild(el);
     chat.scrollTop = chat.scrollHeight;
 
     // Type character by character
@@ -723,11 +880,19 @@ async function showMessage(index) {
         const el = document.createElement('div');
         el.className = 'assistant-block bullet-text';
         el.innerHTML = '<span class="bullet">●</span>' + md(block.text);
-        chat.appendChild(el);
+        chatInner.appendChild(el);
         chat.scrollTop = chat.scrollHeight;
         await new Promise(r => setTimeout(r, Math.max(80, 400 / speed)));
 
       } else if (block.type === 'tool_use') {
+        // Task tools render as task list widget, not tool calls
+        if (isTaskTool(block.name)) {
+          handleTaskTool(block);
+          chat.scrollTop = chat.scrollHeight;
+          await new Promise(r => setTimeout(r, Math.max(50, 150 / speed)));
+          continue;
+        }
+
         const summary = getToolSummary(block);
         const command = getToolCommand(block);
         const commandLines = command.split('\n');
@@ -748,7 +913,7 @@ async function showMessage(index) {
           ${extraLines > 0 ? `<div class="tool-call-expand" onclick="this.parentElement.classList.toggle('open')">… +${extraLines} lines (click to expand)</div>` : ''}
         `;
 
-        chat.appendChild(toolEl);
+        chatInner.appendChild(toolEl);
         chat.scrollTop = chat.scrollHeight;
 
         updateStatus('active', `${block.name}...`);
@@ -779,7 +944,7 @@ async function showMessage(index) {
               <div class="tool-result-body"><pre>${escHtml(redacted)}</pre></div>
             `;
 
-            chat.appendChild(resultEl);
+            chatInner.appendChild(resultEl);
             chat.scrollTop = chat.scrollHeight;
             await new Promise(r => setTimeout(r, Math.max(80, 250 / speed)));
           }
@@ -792,7 +957,7 @@ async function showMessage(index) {
     const statusEl = document.createElement('div');
     statusEl.className = 'status-line';
     statusEl.innerHTML = `<span class="status-icon">✱</span> Worked for ${elapsed}s`;
-    chat.appendChild(statusEl);
+    chatInner.appendChild(statusEl);
 
     updateStatus('idle', 'Idle');
     await new Promise(r => setTimeout(r, Math.max(100, 400 / speed)));
@@ -875,10 +1040,13 @@ document.getElementById('btn-realtime').onclick = () => {
 document.getElementById('new-file-btn').onclick = () => {
   document.getElementById('replay-screen').style.display = 'none';
   document.getElementById('upload-screen').style.display = 'flex';
-  chat.innerHTML = '';
+  chatInner.innerHTML = '';
   messages = [];
   currentIndex = 0;
   playing = false;
+  taskState.clear();
+  taskCounter = 0;
+  taskListEl = null;
   updatePlayButton();
 };
 

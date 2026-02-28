@@ -28,14 +28,17 @@ Claude Code stores conversation logs as JSONL files at:
 
 ## Features
 
-- Renders user messages with `>` prompt and blue background
-- Assistant text with `*` bullet prefix
-- Tool calls shown as `* ToolName(summary)` with expandable body
-- Tool results with `L` connector and expandable output
-- `* Worked for Xs` status lines between turns
+- Bottom-aligned chat (content starts at bottom, scrolls up like a real terminal)
+- User messages with `>` prompt and blue background
+- Assistant text with bullet prefix
+- Tool calls shown as `ToolName(summary)` with expandable body
+- Tool results with connector and expandable output
+- TaskCreate/TaskUpdate render as a live task list widget (checkboxes, strikethrough for completed)
+- Status lines between turns
 - Markdown rendering (code blocks, headers, lists, tables, links)
 - Credential redaction (API keys, SSH keys)
 - Speed control: 0.25x to 16x
+- Real-time mode: replay at original conversation pace
 
 ## Privacy
 
