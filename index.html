@@ -400,11 +400,18 @@
   .status-dot.paused { background: var(--amber); }
   .status-dot.idle { background: var(--text-muted); }
 
-  /* Task list widget */
-  .task-list-widget {
-    margin: 8px 0;
+  /* Task panel — pinned above chat */
+  #task-panel {
+    display: none;
+    flex-shrink: 0;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
     font-size: 13px;
+    max-height: 40vh;
+    overflow-y: auto;
   }
+
+  #task-panel.visible { display: block; }
 
   .task-list-header {
     display: flex;
@@ -420,11 +427,6 @@
   .task-list-header .task-header-text {
     color: var(--amber);
     font-weight: 700;
-  }
-
-  .task-list-header .task-header-meta {
-    color: var(--text-muted);
-    font-size: 12px;
   }
 
   .task-list-items {
@@ -497,6 +499,7 @@
     <button id="new-file-btn">New file</button>
   </div>
 
+  <div id="task-panel"></div>
   <div id="chat"><div id="chat-inner"></div></div>
 
   <div id="status-bar">
@@ -718,7 +721,7 @@ function getToolCommand(tool) {
 // --- Task tracking ---
 const taskState = new Map(); // "1" -> {subject, status, activeForm}
 let taskCounter = 0;
-let taskListEl = null;
+const taskPanel = document.getElementById('task-panel');
 
 function isTaskTool(name) {
   return ['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet'].includes(name);
@@ -747,18 +750,15 @@ function handleTaskTool(block) {
       }
     }
   }
-  // TaskList / TaskGet: just re-render the widget
+  // TaskList / TaskGet: just re-render
 
   renderTaskList();
 }
 
 function renderTaskList() {
-  if (taskState.size === 0) return;
-
-  if (!taskListEl) {
-    taskListEl = document.createElement('div');
-    taskListEl.className = 'task-list-widget';
-    chatInner.appendChild(taskListEl);
+  if (taskState.size === 0) {
+    taskPanel.classList.remove('visible');
+    return;
   }
 
   const tasks = Array.from(taskState.values());
@@ -775,14 +775,14 @@ function renderTaskList() {
   }
   html += '<div class="task-list-items">';
 
-  // Show pending/in-progress first
+  // Pending/in-progress first
   for (const t of pending) {
     const icon = t.status === 'in_progress' ? '◐' : '□';
     const cls = t.status === 'in_progress' ? 'in-progress' : 'pending';
     html += `<div class="task-item ${cls}"><span class="task-check">${icon}</span><span class="task-subject">${escHtml(t.subject)}</span></div>`;
   }
 
-  // Show completed (collapse if many)
+  // Completed (collapse if many)
   const SHOW_MAX = 8;
   const visible = completed.slice(0, SHOW_MAX);
   const hidden = completed.length - SHOW_MAX;
@@ -796,8 +796,8 @@ function renderTaskList() {
   }
 
   html += '</div>';
-  taskListEl.innerHTML = html;
-  chat.scrollTop = chat.scrollHeight;
+  taskPanel.innerHTML = html;
+  taskPanel.classList.add('visible');
 }
 
 // --- Playback ---
@@ -1046,7 +1046,8 @@ document.getElementById('new-file-btn').onclick = () => {
   playing = false;
   taskState.clear();
   taskCounter = 0;
-  taskListEl = null;
+  taskPanel.innerHTML = '';
+  taskPanel.classList.remove('visible');
   updatePlayButton();
 };
 
