@@ -862,18 +862,22 @@ function renderTaskList() {
 const chat = document.getElementById('chat');
 const chatInner = document.getElementById('chat-inner');
 
-// Smart auto-scroll: track user scroll intent, not position-after-append
-let userScrolledUp = false;
+// Auto-scroll: pin to bottom unless user scrolls up
+let autoScrollEnabled = true;
 
 chat.addEventListener('scroll', () => {
-  // If user is near the bottom, they haven't scrolled away
+  // Only track user-initiated scrolls, not our programmatic ones
+  if (scrollingProgrammatically) return;
   const distFromBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight;
-  userScrolledUp = distFromBottom > 50;
+  autoScrollEnabled = distFromBottom < 50;
 });
 
+let scrollingProgrammatically = false;
 function autoScroll() {
-  if (userScrolledUp) return;
+  if (!autoScrollEnabled) return;
+  scrollingProgrammatically = true;
   chat.scrollTop = chat.scrollHeight;
+  scrollingProgrammatically = false;
 }
 const progressBar = document.getElementById('progress-bar');
 const progressFill = document.getElementById('progress-fill');
@@ -1036,7 +1040,11 @@ function seekTo(targetIndex) {
   currentIndex = targetIndex;
   updateProgress();
   updateStatus('paused', 'Paused');
+  // Force scroll and re-enable auto-scroll on explicit seek
+  autoScrollEnabled = true;
+  scrollingProgrammatically = true;
   chat.scrollTop = chat.scrollHeight;
+  scrollingProgrammatically = false;
 }
 
 // --- Progress bar interaction ---
