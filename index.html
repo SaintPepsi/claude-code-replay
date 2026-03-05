@@ -879,6 +879,17 @@ function autoScroll() {
   chat.scrollTop = chat.scrollHeight;
   scrollingProgrammatically = false;
 }
+
+// ResizeObserver: catches cases where scrollHeight updates after layout
+// reflow (e.g. images loading, markdown rendering) that the synchronous
+// autoScroll() call misses because scrollHeight was stale.
+const resizeObserver = new ResizeObserver(() => {
+  if (!autoScrollEnabled) return;
+  scrollingProgrammatically = true;
+  chat.scrollTop = chat.scrollHeight;
+  scrollingProgrammatically = false;
+});
+resizeObserver.observe(chatInner);
 const progressBar = document.getElementById('progress-bar');
 const progressFill = document.getElementById('progress-fill');
 const progressTicks = document.getElementById('progress-ticks');
