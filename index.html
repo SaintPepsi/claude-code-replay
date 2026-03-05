@@ -861,6 +861,35 @@ function renderTaskList() {
 // --- Playback ---
 const chat = document.getElementById('chat');
 const chatInner = document.getElementById('chat-inner');
+
+// Auto-scroll: pin to bottom unless user scrolls up
+let autoScrollEnabled = true;
+
+chat.addEventListener('scroll', () => {
+  // Only track user-initiated scrolls, not our programmatic ones
+  if (scrollingProgrammatically) return;
+  const distFromBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight;
+  autoScrollEnabled = distFromBottom < 50;
+});
+
+let scrollingProgrammatically = false;
+function autoScroll() {
+  if (!autoScrollEnabled) return;
+  scrollingProgrammatically = true;
+  chat.scrollTop = chat.scrollHeight;
+  scrollingProgrammatically = false;
+}
+
+// ResizeObserver: catches cases where scrollHeight updates after layout
+// reflow (e.g. images loading, markdown rendering) that the synchronous
+// autoScroll() call misses because scrollHeight was stale.
+const resizeObserver = new ResizeObserver(() => {
+  if (!autoScrollEnabled) return;
+  scrollingProgrammatically = true;
+  chat.scrollTop = chat.scrollHeight;
+  scrollingProgrammatically = false;
+});
+resizeObserver.observe(chatInner);
 const progressBar = document.getElementById('progress-bar');
 const progressFill = document.getElementById('progress-fill');
 const progressTicks = document.getElementById('progress-ticks');
@@ -880,7 +909,8 @@ function updateStatus(state, text) {
 }
 
 // --- Instant rendering helpers (used when cancelling mid-animation and seeking) ---
-function renderToolCall(block) {
+function renderToolCall(block, target) {
+  target = target || chatInner;
   const summary = getToolSummary(block);
   const command = getToolCommand(block);
   const commandLines = command.split('\n');
@@ -897,10 +927,11 @@ function renderToolCall(block) {
     <div class="tool-call-body"><pre>${escHtml(redact(previewLine))}</pre></div>
     ${extraLines > 0 ? `<div class="tool-call-expand" onclick="this.parentElement.classList.toggle('open')">… +${extraLines} lines (click to expand)</div>` : ''}
   `;
-  chatInner.appendChild(toolEl);
+  target.appendChild(toolEl);
 }
 
-function renderToolResult(result) {
+function renderToolResult(result, target) {
+  target = target || chatInner;
   const isError = result.is_error;
   const resultText = result.stdout || result.content || '';
   const stderrText = result.stderr || '';
@@ -923,38 +954,42 @@ function renderToolResult(result) {
     ${moreLines > 0 ? `<div class="tool-result-expand" onclick="this.parentElement.classList.toggle('open')">… +${moreLines} lines (click to expand)</div>` : ''}
     <div class="tool-result-body"><pre>${escHtml(redacted)}</pre></div>
   `;
-  chatInner.appendChild(resultEl);
+  target.appendChild(resultEl);
 }
 
-function renderBlockInstant(block) {
+function renderBlockInstant(block, target) {
+  target = target || chatInner;
   if (block.type === 'text' && block.text) {
     const el = document.createElement('div');
     el.className = 'assistant-block bullet-text';
     el.innerHTML = '<span class="bullet">●</span>' + md(block.text);
-    chatInner.appendChild(el);
+    target.appendChild(el);
   } else if (block.type === 'tool_use') {
     if (isTaskTool(block.name)) {
       handleTaskTool(block);
     } else {
-      renderToolCall(block);
-      if (block.result) renderToolResult(block.result);
+      renderToolCall(block, target);
+      if (block.result) renderToolResult(block.result, target);
     }
   }
-  chat.scrollTop = chat.scrollHeight;
+  if (target === chatInner) autoScroll();
 }
 
 // --- Progress bar ticks ---
 function buildProgressTicks() {
   progressTicks.innerHTML = '';
+  const frag = document.createDocumentFragment();
   for (let i = 0; i < messages.length; i++) {
     const tick = document.createElement('div');
     tick.className = 'progress-tick ' + (messages[i].type === 'user' ? 'tick-user' : 'tick-assistant');
-    progressTicks.appendChild(tick);
+    frag.appendChild(tick);
   }
+  progressTicks.appendChild(frag);
 }
 
 // --- Instant rendering (for seeking) ---
-function renderUserInstant(msg) {
+function renderUserInstant(msg, target) {
+  target = target || chatInner;
   const el = document.createElement('div');
   el.className = 'msg-user';
   const prompt = document.createElement('span');
@@ -965,29 +1000,30 @@ function renderUserInstant(msg) {
   textSpan.textContent = msg.text;
   el.appendChild(prompt);
   el.appendChild(textSpan);
-  chatInner.appendChild(el);
+  target.appendChild(el);
 }
 
-function renderAssistantInstant(msg) {
+function renderAssistantInstant(msg, target) {
+  target = target || chatInner;
   for (const block of msg.content) {
-    renderBlockInstant(block);
+    renderBlockInstant(block, target);
   }
-  // Status line
   const statusEl = document.createElement('div');
   statusEl.className = 'status-line';
   statusEl.innerHTML = `<span class="status-icon">✱</span> Worked for 0s`;
-  chatInner.appendChild(statusEl);
+  target.appendChild(statusEl);
 }
 
-function renderMessageInstant(msg) {
-  if (msg.type === 'user') renderUserInstant(msg);
-  else if (msg.type === 'assistant') renderAssistantInstant(msg);
+function renderMessageInstant(msg, target) {
+  if (msg.type === 'user') renderUserInstant(msg, target);
+  else if (msg.type === 'assistant') renderAssistantInstant(msg, target);
 }
 
 function seekTo(targetIndex) {
   targetIndex = Math.max(0, Math.min(targetIndex, messages.length));
 
-  // Stop playback
+  // Cancel active animation so it can't overwrite currentIndex
+  playGeneration++;
   playing = false;
   updatePlayButton();
 
@@ -998,20 +1034,31 @@ function seekTo(targetIndex) {
     taskCounter = 0;
     taskPanel.innerHTML = '';
     taskPanel.classList.remove('visible');
+    const frag = document.createDocumentFragment();
     for (let i = 0; i < targetIndex; i++) {
-      renderMessageInstant(messages[i]);
+      renderMessageInstant(messages[i], frag);
     }
+    chatInner.appendChild(frag);
   } else {
     // Forward seek — render from current to target
+    const frag = document.createDocumentFragment();
     for (let i = currentIndex; i < targetIndex; i++) {
-      renderMessageInstant(messages[i]);
+      renderMessageInstant(messages[i], frag);
     }
+    chatInner.appendChild(frag);
   }
 
   currentIndex = targetIndex;
   updateProgress();
   updateStatus('paused', 'Paused');
-  chat.scrollTop = chat.scrollHeight;
+  // Scroll the target message into view, don't force to bottom
+  autoScrollEnabled = false;
+  const lastChild = chatInner.lastElementChild;
+  if (lastChild) {
+    scrollingProgrammatically = true;
+    lastChild.scrollIntoView({ block: 'start', behavior: 'instant' });
+    scrollingProgrammatically = false;
+  }
 }
 
 // --- Progress bar interaction ---
@@ -1073,19 +1120,20 @@ async function showMessage(index, gen) {
     el.appendChild(prompt);
     el.appendChild(textSpan);
     chatInner.appendChild(el);
-    chat.scrollTop = chat.scrollHeight;
+    autoScroll();
 
     // Type character by character
     const cursor = document.createElement('span');
     cursor.className = 'typing-cursor';
     textSpan.appendChild(cursor);
 
-    const chars = msg.text.split('');
+    const text = msg.text;
+    const CHUNK = 5;
     let interrupted = false;
-    for (let i = 0; i < chars.length; i++) {
+    for (let i = 0; i < text.length; i += CHUNK) {
       if (cancelled()) { interrupted = true; break; }
-      textSpan.insertBefore(document.createTextNode(chars[i]), cursor);
-      if (i % 3 === 0) chat.scrollTop = chat.scrollHeight;
+      textSpan.insertBefore(document.createTextNode(text.slice(i, i + CHUNK)), cursor);
+      autoScroll();
       await new Promise(r => setTimeout(r, 25 / speed));
     }
 
@@ -1093,14 +1141,12 @@ async function showMessage(index, gen) {
     if (interrupted) {
       cursor.remove();
       textSpan.textContent = msg.text;
-      chat.scrollTop = chat.scrollHeight;
-      currentIndex = index + 1;
-      updateProgress();
+      autoScroll();
       return;
     }
 
     cursor.remove();
-    if (cancelled()) { currentIndex = index + 1; updateProgress(); return; }
+    if (cancelled()) return;
     await new Promise(r => setTimeout(r, 300 / speed));
 
   } else if (msg.type === 'assistant') {
@@ -1124,14 +1170,14 @@ async function showMessage(index, gen) {
         el.className = 'assistant-block bullet-text';
         el.innerHTML = '<span class="bullet">●</span>' + md(block.text);
         chatInner.appendChild(el);
-        chat.scrollTop = chat.scrollHeight;
+        autoScroll();
         if (cancelled()) continue;
         await new Promise(r => setTimeout(r, Math.max(80, 400 / speed)));
 
       } else if (block.type === 'tool_use') {
         if (isTaskTool(block.name)) {
           handleTaskTool(block);
-          chat.scrollTop = chat.scrollHeight;
+          autoScroll();
           if (cancelled()) continue;
           await new Promise(r => setTimeout(r, Math.max(50, 150 / speed)));
           continue;
@@ -1159,13 +1205,14 @@ async function showMessage(index, gen) {
     statusEl.className = 'status-line';
     statusEl.innerHTML = `<span class="status-icon">✱</span> Worked for ${elapsed}s`;
     chatInner.appendChild(statusEl);
-    chat.scrollTop = chat.scrollHeight;
+    autoScroll();
 
-    if (cancelled()) { currentIndex = index + 1; updateProgress(); return; }
+    if (cancelled()) return;
     updateStatus('idle', 'Idle');
     await new Promise(r => setTimeout(r, Math.max(100, 400 / speed)));
   }
 
+  if (cancelled()) return;
   currentIndex = index + 1;
   updateProgress();
 }
