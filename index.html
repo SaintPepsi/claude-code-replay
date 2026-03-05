@@ -582,32 +582,38 @@ function md(text) {
   if (!text) return '';
   text = redact(text);
 
-  // Code blocks
+  // 1. Extract fenced code blocks into placeholders (before escaping)
+  const codeBlocks = [];
   text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    return `<pre><code>${escHtml(code.trim())}</code></pre>`;
+    const idx = codeBlocks.length;
+    codeBlocks.push(`<pre><code>${escHtml(code.trim())}</code></pre>`);
+    return `\x00CODEBLOCK${idx}\x00`;
   });
 
-  // Inline code
+  // 2. Escape all remaining HTML so raw <div>, <script>, etc. display as text
+  text = escHtml(text);
+
+  // 3. Inline code (on escaped text — escape is already done, just wrap)
   text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-  // Bold
+  // 4. Bold
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
-  // Italic
+  // 5. Italic
   text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
 
-  // Headers
+  // 6. Headers
   text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-  // Blockquotes
-  text = text.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+  // 7. Blockquotes
+  text = text.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
 
-  // Unordered lists
+  // 8. Unordered lists (- and * are not affected by escaping)
   text = text.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
 
-  // Tables
+  // 9. Tables (| is not affected by escaping)
   text = text.replace(/^\|(.+)\|$/gm, (match, inner) => {
     const cells = inner.split('|').map(c => c.trim());
     if (cells.every(c => /^[\-:]+$/.test(c))) return '';
@@ -617,14 +623,19 @@ function md(text) {
     text = text.replace(/((?:<tr>.*<\/tr>\n?)+)/g, '<table>$1</table>');
   }
 
-  // Links
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  // 10. Links — after escaping, () and [] are unchanged, but href may have &amp;
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+    return `<a href="${url.replace(/&amp;/g, '&')}" target="_blank">${label}</a>`;
+  });
 
-  // Line breaks to <br> for single newlines, paragraphs for double
+  // 11. Line breaks
   text = text.replace(/\n{2,}/g, '</p><p>');
   text = text.replace(/\n/g, '<br>');
   if (!text.startsWith('<')) text = '<p>' + text + '</p>';
   text = text.replace(/<p>\s*<\/p>/g, '');
+
+  // 12. Restore code block placeholders
+  text = text.replace(/\x00CODEBLOCK(\d+)\x00/g, (_, idx) => codeBlocks[parseInt(idx)]);
 
   return text;
 }
