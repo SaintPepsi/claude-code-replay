@@ -522,6 +522,8 @@ let speed = 1;
 const speeds = [0.25, 0.5, 1, 2, 4, 8, 16];
 let speedIdx = 2;
 let realTimeMode = false;
+let playGeneration = 0; // Incremented on every new action to cancel prior animations
+let activeShowMessage = null; // Promise of the currently running showMessage
 
 // --- Credential redaction ---
 function redact(text) {
@@ -819,13 +821,79 @@ function updateStatus(state, text) {
   statusTextEl.textContent = text;
 }
 
-async function showMessage(index) {
+// --- Instant rendering helpers (used when cancelling mid-animation) ---
+function renderToolCall(block) {
+  const summary = getToolSummary(block);
+  const command = getToolCommand(block);
+  const commandLines = command.split('\n');
+  const previewLine = commandLines[0].substring(0, 90);
+  const extraLines = commandLines.length - 1;
+
+  const toolEl = document.createElement('div');
+  toolEl.className = 'tool-call';
+  toolEl.innerHTML = `
+    <div class="tool-call-header" onclick="this.parentElement.classList.toggle('open')">
+      <span class="bullet">●</span>
+      <span class="tool-call-name">${escHtml(block.name)}</span><span class="tool-call-paren">(</span><span class="tool-call-summary">${escHtml(summary)}</span><span class="tool-call-paren">)</span>
+    </div>
+    <div class="tool-call-body"><pre>${escHtml(redact(previewLine))}</pre></div>
+    ${extraLines > 0 ? `<div class="tool-call-expand" onclick="this.parentElement.classList.toggle('open')">… +${extraLines} lines (click to expand)</div>` : ''}
+  `;
+  chatInner.appendChild(toolEl);
+}
+
+function renderToolResult(result) {
+  const isError = result.is_error;
+  const resultText = result.stdout || result.content || '';
+  const stderrText = result.stderr || '';
+  const displayText = (resultText + (stderrText ? '\n' + stderrText : '')).trim();
+
+  if (!displayText) return;
+
+  const redacted = redact(displayText);
+  const resultLines = redacted.split('\n');
+  const previewText = resultLines[0].substring(0, 90);
+  const moreLines = resultLines.length - 1;
+
+  const resultEl = document.createElement('div');
+  resultEl.className = `tool-result ${isError ? 'error' : ''}`;
+  resultEl.innerHTML = `
+    <div class="tool-result-line" onclick="this.parentElement.classList.toggle('open')">
+      <span class="tool-result-connector">└</span>
+      <span class="tool-result-preview">${escHtml(previewText)}</span>
+    </div>
+    ${moreLines > 0 ? `<div class="tool-result-expand" onclick="this.parentElement.classList.toggle('open')">… +${moreLines} lines (click to expand)</div>` : ''}
+    <div class="tool-result-body"><pre>${escHtml(redacted)}</pre></div>
+  `;
+  chatInner.appendChild(resultEl);
+}
+
+function renderBlockInstant(block) {
+  if (block.type === 'text' && block.text) {
+    const el = document.createElement('div');
+    el.className = 'assistant-block bullet-text';
+    el.innerHTML = '<span class="bullet">●</span>' + md(block.text);
+    chatInner.appendChild(el);
+  } else if (block.type === 'tool_use') {
+    if (isTaskTool(block.name)) {
+      handleTaskTool(block);
+    } else {
+      renderToolCall(block);
+      if (block.result) renderToolResult(block.result);
+    }
+  }
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function showMessage(index, gen) {
   if (index >= messages.length) {
     playing = false;
     updatePlayButton();
     updateStatus('idle', 'Complete');
     return;
   }
+
+  const cancelled = () => gen !== playGeneration;
 
   currentIndex = index;
   updateProgress();
@@ -856,23 +924,41 @@ async function showMessage(index) {
     textSpan.appendChild(cursor);
 
     const chars = msg.text.split('');
+    let interrupted = false;
     for (let i = 0; i < chars.length; i++) {
-      if (!playing) break;
+      if (cancelled()) { interrupted = true; break; }
       textSpan.insertBefore(document.createTextNode(chars[i]), cursor);
       if (i % 3 === 0) chat.scrollTop = chat.scrollHeight;
       await new Promise(r => setTimeout(r, 25 / speed));
     }
-    cursor.remove();
 
+    // If interrupted, instantly complete the remaining text
+    if (interrupted) {
+      cursor.remove();
+      textSpan.textContent = msg.text;
+      chat.scrollTop = chat.scrollHeight;
+      currentIndex = index + 1;
+      updateProgress();
+      return;
+    }
+
+    cursor.remove();
+    if (cancelled()) { currentIndex = index + 1; updateProgress(); return; }
     await new Promise(r => setTimeout(r, 300 / speed));
 
   } else if (msg.type === 'assistant') {
-    // Calculate simulated duration
-    let blockCount = msg.content.length;
     let startTime = Date.now();
 
-    for (const block of msg.content) {
-      if (!playing) break;
+    for (let bi = 0; bi < msg.content.length; bi++) {
+      const block = msg.content[bi];
+
+      // If cancelled, render all remaining blocks instantly and return
+      if (cancelled()) {
+        for (let ri = bi; ri < msg.content.length; ri++) {
+          renderBlockInstant(msg.content[ri]);
+        }
+        break;
+      }
 
       if (block.type === 'text' && block.text) {
         updateStatus('active', 'Responding...');
@@ -882,72 +968,30 @@ async function showMessage(index) {
         el.innerHTML = '<span class="bullet">●</span>' + md(block.text);
         chatInner.appendChild(el);
         chat.scrollTop = chat.scrollHeight;
+        if (cancelled()) continue;
         await new Promise(r => setTimeout(r, Math.max(80, 400 / speed)));
 
       } else if (block.type === 'tool_use') {
-        // Task tools render as task list widget, not tool calls
         if (isTaskTool(block.name)) {
           handleTaskTool(block);
           chat.scrollTop = chat.scrollHeight;
+          if (cancelled()) continue;
           await new Promise(r => setTimeout(r, Math.max(50, 150 / speed)));
           continue;
         }
 
-        const summary = getToolSummary(block);
-        const command = getToolCommand(block);
-        const commandLines = command.split('\n');
-        const previewLine = commandLines[0].substring(0, 90);
-        const extraLines = commandLines.length - 1;
-
-        // Tool call header: ● Bash(summary)
-        const toolEl = document.createElement('div');
-        toolEl.className = 'tool-call';
-
-        const headerId = 'tc-' + Math.random().toString(36).substr(2, 6);
-        toolEl.innerHTML = `
-          <div class="tool-call-header" onclick="this.parentElement.classList.toggle('open')">
-            <span class="bullet">●</span>
-            <span class="tool-call-name">${escHtml(block.name)}</span><span class="tool-call-paren">(</span><span class="tool-call-summary">${escHtml(summary)}</span><span class="tool-call-paren">)</span>
-          </div>
-          <div class="tool-call-body"><pre>${escHtml(redact(previewLine))}</pre></div>
-          ${extraLines > 0 ? `<div class="tool-call-expand" onclick="this.parentElement.classList.toggle('open')">… +${extraLines} lines (click to expand)</div>` : ''}
-        `;
-
-        chatInner.appendChild(toolEl);
-        chat.scrollTop = chat.scrollHeight;
-
+        renderToolCall(block);
         updateStatus('active', `${block.name}...`);
+        if (cancelled()) {
+          if (block.result) renderToolResult(block.result);
+          continue;
+        }
         await new Promise(r => setTimeout(r, Math.max(150, 600 / speed)));
 
-        // Tool result: └ preview
         if (block.result) {
-          const r = block.result;
-          const isError = r.is_error;
-          const resultText = r.stdout || r.content || '';
-          const stderrText = r.stderr || '';
-          const displayText = (resultText + (stderrText ? '\n' + stderrText : '')).trim();
-
-          if (displayText) {
-            const redacted = redact(displayText);
-            const resultLines = redacted.split('\n');
-            const previewText = resultLines[0].substring(0, 90);
-            const moreLines = resultLines.length - 1;
-
-            const resultEl = document.createElement('div');
-            resultEl.className = `tool-result ${isError ? 'error' : ''}`;
-            resultEl.innerHTML = `
-              <div class="tool-result-line" onclick="this.parentElement.classList.toggle('open')">
-                <span class="tool-result-connector">└</span>
-                <span class="tool-result-preview">${escHtml(previewText)}</span>
-              </div>
-              ${moreLines > 0 ? `<div class="tool-result-expand" onclick="this.parentElement.classList.toggle('open')">… +${moreLines} lines (click to expand)</div>` : ''}
-              <div class="tool-result-body"><pre>${escHtml(redacted)}</pre></div>
-            `;
-
-            chatInner.appendChild(resultEl);
-            chat.scrollTop = chat.scrollHeight;
-            await new Promise(r => setTimeout(r, Math.max(80, 250 / speed)));
-          }
+          renderToolResult(block.result);
+          if (cancelled()) continue;
+          await new Promise(r => setTimeout(r, Math.max(80, 250 / speed)));
         }
       }
     }
@@ -958,7 +1002,9 @@ async function showMessage(index) {
     statusEl.className = 'status-line';
     statusEl.innerHTML = `<span class="status-icon">✱</span> Worked for ${elapsed}s`;
     chatInner.appendChild(statusEl);
+    chat.scrollTop = chat.scrollHeight;
 
+    if (cancelled()) { currentIndex = index + 1; updateProgress(); return; }
     updateStatus('idle', 'Idle');
     await new Promise(r => setTimeout(r, Math.max(100, 400 / speed)));
   }
@@ -977,19 +1023,21 @@ function getRealTimeDelay(fromIndex, toIndex) {
   return Math.min(30000, Math.max(200, delta)) / speed;
 }
 
-async function playFrom(index) {
+async function playFrom(index, gen) {
   for (let i = index; i < messages.length; i++) {
-    if (!playing) break;
+    if (!playing || gen !== playGeneration) break;
     // Real-time delay between messages
     if (realTimeMode && i > index) {
       const delay = getRealTimeDelay(i - 1, i);
       if (delay > 0) {
         updateStatus('active', `Next in ${(delay / 1000).toFixed(1)}s...`);
         await new Promise(r => setTimeout(r, delay));
-        if (!playing) break;
+        if (!playing || gen !== playGeneration) break;
       }
     }
-    await showMessage(i);
+    activeShowMessage = showMessage(i, gen);
+    await activeShowMessage;
+    activeShowMessage = null;
   }
 }
 
@@ -1000,24 +1048,34 @@ function updatePlayButton() {
   btn.classList.toggle('active', playing);
 }
 
-document.getElementById('btn-play').onclick = () => {
+document.getElementById('btn-play').onclick = async () => {
+  const gen = ++playGeneration; // Cancel any prior animation
+  if (activeShowMessage) await activeShowMessage;
+  if (gen !== playGeneration) return;
   playing = !playing;
   updatePlayButton();
   if (playing) {
     updateStatus('active', 'Playing...');
-    playFrom(currentIndex);
+    playFrom(currentIndex, gen);
   } else {
     updateStatus('paused', 'Paused');
   }
 };
 
-document.getElementById('btn-step').onclick = () => {
+document.getElementById('btn-step').onclick = async () => {
+  const gen = ++playGeneration; // Cancel any prior animation
+  // Wait for prior animation to finish cancelling (so currentIndex is updated)
+  if (activeShowMessage) await activeShowMessage;
+  if (gen !== playGeneration) return; // Another action happened while we waited
   playing = true;
-  showMessage(currentIndex).then(() => {
+  activeShowMessage = showMessage(currentIndex, gen);
+  await activeShowMessage;
+  activeShowMessage = null;
+  if (gen === playGeneration) {
     playing = false;
     updatePlayButton();
     updateStatus('paused', 'Paused');
-  });
+  }
 };
 
 document.getElementById('btn-slower').onclick = () => {
