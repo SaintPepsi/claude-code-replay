@@ -862,16 +862,18 @@ function renderTaskList() {
 const chat = document.getElementById('chat');
 const chatInner = document.getElementById('chat-inner');
 
-// Smart auto-scroll: only scroll if user is near the bottom
-function isNearBottom() {
-  return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 50;
-}
+// Smart auto-scroll: track user scroll intent, not position-after-append
+let userScrolledUp = false;
+
+chat.addEventListener('scroll', () => {
+  // If user is near the bottom, they haven't scrolled away
+  const distFromBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight;
+  userScrolledUp = distFromBottom > 50;
+});
 
 let scrollRafPending = false;
 function autoScroll() {
-  // Check position synchronously before rAF — after rAF the DOM has grown
-  // and the user appears "not near bottom" even if they never scrolled up
-  if (!isNearBottom()) return;
+  if (userScrolledUp) return;
   if (scrollRafPending) return;
   scrollRafPending = true;
   requestAnimationFrame(() => {
