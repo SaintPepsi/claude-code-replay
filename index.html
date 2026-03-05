@@ -861,6 +861,15 @@ function renderTaskList() {
 // --- Playback ---
 const chat = document.getElementById('chat');
 const chatInner = document.getElementById('chat-inner');
+
+// Smart auto-scroll: only scroll if user is near the bottom
+function isNearBottom() {
+  return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 50;
+}
+
+function autoScroll() {
+  if (isNearBottom()) chat.scrollTop = chat.scrollHeight;
+}
 const progressBar = document.getElementById('progress-bar');
 const progressFill = document.getElementById('progress-fill');
 const progressTicks = document.getElementById('progress-ticks');
@@ -940,7 +949,7 @@ function renderBlockInstant(block) {
       if (block.result) renderToolResult(block.result);
     }
   }
-  chat.scrollTop = chat.scrollHeight;
+  autoScroll();
 }
 
 // --- Progress bar ticks ---
@@ -1073,7 +1082,7 @@ async function showMessage(index, gen) {
     el.appendChild(prompt);
     el.appendChild(textSpan);
     chatInner.appendChild(el);
-    chat.scrollTop = chat.scrollHeight;
+    autoScroll();
 
     // Type character by character
     const cursor = document.createElement('span');
@@ -1085,7 +1094,7 @@ async function showMessage(index, gen) {
     for (let i = 0; i < chars.length; i++) {
       if (cancelled()) { interrupted = true; break; }
       textSpan.insertBefore(document.createTextNode(chars[i]), cursor);
-      if (i % 3 === 0) chat.scrollTop = chat.scrollHeight;
+      if (i % 3 === 0) autoScroll();
       await new Promise(r => setTimeout(r, 25 / speed));
     }
 
@@ -1093,7 +1102,7 @@ async function showMessage(index, gen) {
     if (interrupted) {
       cursor.remove();
       textSpan.textContent = msg.text;
-      chat.scrollTop = chat.scrollHeight;
+      autoScroll();
       currentIndex = index + 1;
       updateProgress();
       return;
@@ -1124,14 +1133,14 @@ async function showMessage(index, gen) {
         el.className = 'assistant-block bullet-text';
         el.innerHTML = '<span class="bullet">●</span>' + md(block.text);
         chatInner.appendChild(el);
-        chat.scrollTop = chat.scrollHeight;
+        autoScroll();
         if (cancelled()) continue;
         await new Promise(r => setTimeout(r, Math.max(80, 400 / speed)));
 
       } else if (block.type === 'tool_use') {
         if (isTaskTool(block.name)) {
           handleTaskTool(block);
-          chat.scrollTop = chat.scrollHeight;
+          autoScroll();
           if (cancelled()) continue;
           await new Promise(r => setTimeout(r, Math.max(50, 150 / speed)));
           continue;
@@ -1159,7 +1168,7 @@ async function showMessage(index, gen) {
     statusEl.className = 'status-line';
     statusEl.innerHTML = `<span class="status-icon">✱</span> Worked for ${elapsed}s`;
     chatInner.appendChild(statusEl);
-    chat.scrollTop = chat.scrollHeight;
+    autoScroll();
 
     if (cancelled()) { currentIndex = index + 1; updateProgress(); return; }
     updateStatus('idle', 'Idle');
