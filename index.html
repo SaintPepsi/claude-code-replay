@@ -1040,11 +1040,14 @@ function seekTo(targetIndex) {
   currentIndex = targetIndex;
   updateProgress();
   updateStatus('paused', 'Paused');
-  // Force scroll and re-enable auto-scroll on explicit seek
-  autoScrollEnabled = true;
-  scrollingProgrammatically = true;
-  chat.scrollTop = chat.scrollHeight;
-  scrollingProgrammatically = false;
+  // Scroll the target message into view, don't force to bottom
+  autoScrollEnabled = false;
+  const lastChild = chatInner.lastElementChild;
+  if (lastChild) {
+    scrollingProgrammatically = true;
+    lastChild.scrollIntoView({ block: 'start', behavior: 'instant' });
+    scrollingProgrammatically = false;
+  }
 }
 
 // --- Progress bar interaction ---
