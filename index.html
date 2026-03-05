@@ -1124,13 +1124,11 @@ async function showMessage(index, gen) {
       cursor.remove();
       textSpan.textContent = msg.text;
       autoScroll();
-      currentIndex = index + 1;
-      updateProgress();
       return;
     }
 
     cursor.remove();
-    if (cancelled()) { currentIndex = index + 1; updateProgress(); return; }
+    if (cancelled()) return;
     await new Promise(r => setTimeout(r, 300 / speed));
 
   } else if (msg.type === 'assistant') {
@@ -1191,11 +1189,12 @@ async function showMessage(index, gen) {
     chatInner.appendChild(statusEl);
     autoScroll();
 
-    if (cancelled()) { currentIndex = index + 1; updateProgress(); return; }
+    if (cancelled()) return;
     updateStatus('idle', 'Idle');
     await new Promise(r => setTimeout(r, Math.max(100, 400 / speed)));
   }
 
+  if (cancelled()) return;
   currentIndex = index + 1;
   updateProgress();
 }
