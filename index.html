@@ -871,15 +871,9 @@ chat.addEventListener('scroll', () => {
   userScrolledUp = distFromBottom > 50;
 });
 
-let scrollRafPending = false;
 function autoScroll() {
   if (userScrolledUp) return;
-  if (scrollRafPending) return;
-  scrollRafPending = true;
-  requestAnimationFrame(() => {
-    scrollRafPending = false;
-    chat.scrollTop = chat.scrollHeight;
-  });
+  chat.scrollTop = chat.scrollHeight;
 }
 const progressBar = document.getElementById('progress-bar');
 const progressFill = document.getElementById('progress-fill');
