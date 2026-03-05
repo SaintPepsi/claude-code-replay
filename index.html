@@ -996,7 +996,8 @@ function renderMessageInstant(msg) {
 function seekTo(targetIndex) {
   targetIndex = Math.max(0, Math.min(targetIndex, messages.length));
 
-  // Stop playback
+  // Cancel active animation so it can't overwrite currentIndex
+  playGeneration++;
   playing = false;
   updatePlayButton();
 
