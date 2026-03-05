@@ -867,8 +867,14 @@ function isNearBottom() {
   return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 50;
 }
 
+let scrollRafPending = false;
 function autoScroll() {
-  if (isNearBottom()) chat.scrollTop = chat.scrollHeight;
+  if (scrollRafPending) return;
+  scrollRafPending = true;
+  requestAnimationFrame(() => {
+    scrollRafPending = false;
+    if (isNearBottom()) chat.scrollTop = chat.scrollHeight;
+  });
 }
 const progressBar = document.getElementById('progress-bar');
 const progressFill = document.getElementById('progress-fill');
@@ -889,7 +895,8 @@ function updateStatus(state, text) {
 }
 
 // --- Instant rendering helpers (used when cancelling mid-animation and seeking) ---
-function renderToolCall(block) {
+function renderToolCall(block, target) {
+  target = target || chatInner;
   const summary = getToolSummary(block);
   const command = getToolCommand(block);
   const commandLines = command.split('\n');
@@ -906,10 +913,11 @@ function renderToolCall(block) {
     <div class="tool-call-body"><pre>${escHtml(redact(previewLine))}</pre></div>
     ${extraLines > 0 ? `<div class="tool-call-expand" onclick="this.parentElement.classList.toggle('open')">… +${extraLines} lines (click to expand)</div>` : ''}
   `;
-  chatInner.appendChild(toolEl);
+  target.appendChild(toolEl);
 }
 
-function renderToolResult(result) {
+function renderToolResult(result, target) {
+  target = target || chatInner;
   const isError = result.is_error;
   const resultText = result.stdout || result.content || '';
   const stderrText = result.stderr || '';
@@ -932,38 +940,42 @@ function renderToolResult(result) {
     ${moreLines > 0 ? `<div class="tool-result-expand" onclick="this.parentElement.classList.toggle('open')">… +${moreLines} lines (click to expand)</div>` : ''}
     <div class="tool-result-body"><pre>${escHtml(redacted)}</pre></div>
   `;
-  chatInner.appendChild(resultEl);
+  target.appendChild(resultEl);
 }
 
-function renderBlockInstant(block) {
+function renderBlockInstant(block, target) {
+  target = target || chatInner;
   if (block.type === 'text' && block.text) {
     const el = document.createElement('div');
     el.className = 'assistant-block bullet-text';
     el.innerHTML = '<span class="bullet">●</span>' + md(block.text);
-    chatInner.appendChild(el);
+    target.appendChild(el);
   } else if (block.type === 'tool_use') {
     if (isTaskTool(block.name)) {
       handleTaskTool(block);
     } else {
-      renderToolCall(block);
-      if (block.result) renderToolResult(block.result);
+      renderToolCall(block, target);
+      if (block.result) renderToolResult(block.result, target);
     }
   }
-  autoScroll();
+  if (target === chatInner) autoScroll();
 }
 
 // --- Progress bar ticks ---
 function buildProgressTicks() {
   progressTicks.innerHTML = '';
+  const frag = document.createDocumentFragment();
   for (let i = 0; i < messages.length; i++) {
     const tick = document.createElement('div');
     tick.className = 'progress-tick ' + (messages[i].type === 'user' ? 'tick-user' : 'tick-assistant');
-    progressTicks.appendChild(tick);
+    frag.appendChild(tick);
   }
+  progressTicks.appendChild(frag);
 }
 
 // --- Instant rendering (for seeking) ---
-function renderUserInstant(msg) {
+function renderUserInstant(msg, target) {
+  target = target || chatInner;
   const el = document.createElement('div');
   el.className = 'msg-user';
   const prompt = document.createElement('span');
@@ -974,23 +986,23 @@ function renderUserInstant(msg) {
   textSpan.textContent = msg.text;
   el.appendChild(prompt);
   el.appendChild(textSpan);
-  chatInner.appendChild(el);
+  target.appendChild(el);
 }
 
-function renderAssistantInstant(msg) {
+function renderAssistantInstant(msg, target) {
+  target = target || chatInner;
   for (const block of msg.content) {
-    renderBlockInstant(block);
+    renderBlockInstant(block, target);
   }
-  // Status line
   const statusEl = document.createElement('div');
   statusEl.className = 'status-line';
   statusEl.innerHTML = `<span class="status-icon">✱</span> Worked for 0s`;
-  chatInner.appendChild(statusEl);
+  target.appendChild(statusEl);
 }
 
-function renderMessageInstant(msg) {
-  if (msg.type === 'user') renderUserInstant(msg);
-  else if (msg.type === 'assistant') renderAssistantInstant(msg);
+function renderMessageInstant(msg, target) {
+  if (msg.type === 'user') renderUserInstant(msg, target);
+  else if (msg.type === 'assistant') renderAssistantInstant(msg, target);
 }
 
 function seekTo(targetIndex) {
@@ -1008,14 +1020,18 @@ function seekTo(targetIndex) {
     taskCounter = 0;
     taskPanel.innerHTML = '';
     taskPanel.classList.remove('visible');
+    const frag = document.createDocumentFragment();
     for (let i = 0; i < targetIndex; i++) {
-      renderMessageInstant(messages[i]);
+      renderMessageInstant(messages[i], frag);
     }
+    chatInner.appendChild(frag);
   } else {
     // Forward seek — render from current to target
+    const frag = document.createDocumentFragment();
     for (let i = currentIndex; i < targetIndex; i++) {
-      renderMessageInstant(messages[i]);
+      renderMessageInstant(messages[i], frag);
     }
+    chatInner.appendChild(frag);
   }
 
   currentIndex = targetIndex;
@@ -1090,12 +1106,13 @@ async function showMessage(index, gen) {
     cursor.className = 'typing-cursor';
     textSpan.appendChild(cursor);
 
-    const chars = msg.text.split('');
+    const text = msg.text;
+    const CHUNK = 5;
     let interrupted = false;
-    for (let i = 0; i < chars.length; i++) {
+    for (let i = 0; i < text.length; i += CHUNK) {
       if (cancelled()) { interrupted = true; break; }
-      textSpan.insertBefore(document.createTextNode(chars[i]), cursor);
-      if (i % 3 === 0) autoScroll();
+      textSpan.insertBefore(document.createTextNode(text.slice(i, i + CHUNK)), cursor);
+      autoScroll();
       await new Promise(r => setTimeout(r, 25 / speed));
     }
 
