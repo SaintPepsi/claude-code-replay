@@ -869,11 +869,14 @@ function isNearBottom() {
 
 let scrollRafPending = false;
 function autoScroll() {
+  // Check position synchronously before rAF — after rAF the DOM has grown
+  // and the user appears "not near bottom" even if they never scrolled up
+  if (!isNearBottom()) return;
   if (scrollRafPending) return;
   scrollRafPending = true;
   requestAnimationFrame(() => {
     scrollRafPending = false;
-    if (isNearBottom()) chat.scrollTop = chat.scrollHeight;
+    chat.scrollTop = chat.scrollHeight;
   });
 }
 const progressBar = document.getElementById('progress-bar');
