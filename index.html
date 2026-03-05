@@ -108,18 +108,63 @@
 
   #progress-bar {
     flex: 1;
-    height: 3px;
+    height: 12px;
     background: var(--border);
-    border-radius: 2px;
+    border-radius: 3px;
     cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: stretch;
   }
 
   #progress-fill {
     height: 100%;
     background: var(--blue);
-    border-radius: 2px;
+    border-radius: 3px;
     width: 0%;
     transition: width 0.1s;
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+  }
+
+  #progress-ticks {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    pointer-events: none;
+  }
+
+  .progress-tick {
+    flex: 1;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    position: relative;
+  }
+
+  .progress-tick:last-child { border-right: none; }
+
+  .progress-tick.tick-user {
+    background: rgba(86, 156, 214, 0.15);
+  }
+
+  .progress-tick.tick-assistant {
+    background: transparent;
+  }
+
+  #progress-bar:hover .progress-tick {
+    border-right-color: rgba(255,255,255,0.15);
+  }
+
+  #progress-bar.dragging {
+    cursor: grabbing;
+  }
+
+  #progress-bar.dragging #progress-fill {
+    transition: none;
   }
 
   .ctrl-sep { width: 1px; height: 20px; background: var(--border); }
@@ -493,7 +538,7 @@
     <div class="ctrl-sep"></div>
     <button class="ctrl-btn" id="btn-realtime" title="Real-time mode (T) — use actual timestamps">Real-time</button>
     <div class="ctrl-sep"></div>
-    <div id="progress-bar"><div id="progress-fill"></div></div>
+    <div id="progress-bar"><div id="progress-fill"></div><div id="progress-ticks"></div></div>
     <div id="msg-counter"></div>
     <div class="ctrl-sep"></div>
     <button id="new-file-btn">New file</button>
@@ -805,7 +850,9 @@ function renderTaskList() {
 // --- Playback ---
 const chat = document.getElementById('chat');
 const chatInner = document.getElementById('chat-inner');
+const progressBar = document.getElementById('progress-bar');
 const progressFill = document.getElementById('progress-fill');
+const progressTicks = document.getElementById('progress-ticks');
 const msgCounter = document.getElementById('msg-counter');
 const statusDot = document.getElementById('status-dot');
 const statusTextEl = document.getElementById('status-text');
@@ -821,7 +868,7 @@ function updateStatus(state, text) {
   statusTextEl.textContent = text;
 }
 
-// --- Instant rendering helpers (used when cancelling mid-animation) ---
+// --- Instant rendering helpers (used when cancelling mid-animation and seeking) ---
 function renderToolCall(block) {
   const summary = getToolSummary(block);
   const command = getToolCommand(block);
@@ -884,6 +931,105 @@ function renderBlockInstant(block) {
   }
   chat.scrollTop = chat.scrollHeight;
 }
+
+// --- Progress bar ticks ---
+function buildProgressTicks() {
+  progressTicks.innerHTML = '';
+  for (let i = 0; i < messages.length; i++) {
+    const tick = document.createElement('div');
+    tick.className = 'progress-tick ' + (messages[i].type === 'user' ? 'tick-user' : 'tick-assistant');
+    progressTicks.appendChild(tick);
+  }
+}
+
+// --- Instant rendering (for seeking) ---
+function renderUserInstant(msg) {
+  const el = document.createElement('div');
+  el.className = 'msg-user';
+  const prompt = document.createElement('span');
+  prompt.className = 'user-prompt';
+  prompt.textContent = '❯';
+  const textSpan = document.createElement('span');
+  textSpan.className = 'user-text';
+  textSpan.textContent = msg.text;
+  el.appendChild(prompt);
+  el.appendChild(textSpan);
+  chatInner.appendChild(el);
+}
+
+function renderAssistantInstant(msg) {
+  for (const block of msg.content) {
+    renderBlockInstant(block);
+  }
+  // Status line
+  const statusEl = document.createElement('div');
+  statusEl.className = 'status-line';
+  statusEl.innerHTML = `<span class="status-icon">✱</span> Worked for 0s`;
+  chatInner.appendChild(statusEl);
+}
+
+function renderMessageInstant(msg) {
+  if (msg.type === 'user') renderUserInstant(msg);
+  else if (msg.type === 'assistant') renderAssistantInstant(msg);
+}
+
+function seekTo(targetIndex) {
+  targetIndex = Math.max(0, Math.min(targetIndex, messages.length));
+
+  // Stop playback
+  playing = false;
+  updatePlayButton();
+
+  if (targetIndex <= currentIndex) {
+    // Backward seek — must rebuild from scratch
+    chatInner.innerHTML = '';
+    taskState.clear();
+    taskCounter = 0;
+    taskPanel.innerHTML = '';
+    taskPanel.classList.remove('visible');
+    for (let i = 0; i < targetIndex; i++) {
+      renderMessageInstant(messages[i]);
+    }
+  } else {
+    // Forward seek — render from current to target
+    for (let i = currentIndex; i < targetIndex; i++) {
+      renderMessageInstant(messages[i]);
+    }
+  }
+
+  currentIndex = targetIndex;
+  updateProgress();
+  updateStatus('paused', 'Paused');
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// --- Progress bar interaction ---
+function getProgressIndex(e) {
+  const rect = progressBar.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  return Math.round(pct * messages.length);
+}
+
+let dragging = false;
+
+progressBar.addEventListener('mousedown', (e) => {
+  if (messages.length === 0) return;
+  dragging = true;
+  progressBar.classList.add('dragging');
+  seekTo(getProgressIndex(e));
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  seekTo(getProgressIndex(e));
+});
+
+document.addEventListener('mouseup', (e) => {
+  if (!dragging) return;
+  dragging = false;
+  progressBar.classList.remove('dragging');
+});
 
 async function showMessage(index, gen) {
   if (index >= messages.length) {
@@ -1106,6 +1252,7 @@ document.getElementById('new-file-btn').onclick = () => {
   taskCounter = 0;
   taskPanel.innerHTML = '';
   taskPanel.classList.remove('visible');
+  progressTicks.innerHTML = '';
   updatePlayButton();
 };
 
@@ -1138,6 +1285,7 @@ function loadFile(file) {
       info.gitBranch ? info.gitBranch : '';
 
     updateProgress();
+    buildProgressTicks();
     updateStatus('idle', `${messages.length} messages loaded`);
   };
   reader.readAsText(file);
