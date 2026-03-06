@@ -1,0 +1,110 @@
+/* Chat area — content hugs bottom like real terminal */
+#chat {
+  flex: 1;
+  overflow-y: auto;
+}
+
+#chat-inner {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 16px 20px;
+}
+
+#chat::-webkit-scrollbar { width: 8px; }
+#chat::-webkit-scrollbar-track { background: var(--bg); }
+#chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* User message — blue-tinted block with ❯ prompt */
+.msg-user {
+  background: var(--bg-user);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 12px 0;
+}
+
+.msg-user .user-prompt {
+  color: var(--blue);
+  margin-right: 8px;
+  font-weight: 700;
+}
+
+.msg-user .user-text {
+  color: var(--white);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Assistant content — no wrapper, just inline blocks */
+.assistant-block {
+  margin: 4px 0;
+}
+
+/* Bullet text — ● prefix */
+.bullet-text {
+  padding: 4px 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.bullet-text .bullet {
+  color: var(--text-dim);
+  margin-right: 6px;
+}
+
+/* Markdown in assistant text */
+.bullet-text strong { color: var(--white); font-weight: 700; }
+.bullet-text em { color: var(--text-dim); font-style: italic; }
+
+.bullet-text code {
+  background: rgba(255,255,255,0.08);
+  color: var(--cyan);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.bullet-text pre {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  overflow-x: auto;
+}
+
+.bullet-text pre code {
+  background: none;
+  padding: 0;
+  color: var(--text);
+}
+
+.bullet-text h1, .bullet-text h2, .bullet-text h3 {
+  color: var(--white);
+  margin: 12px 0 6px 0;
+  font-weight: 600;
+}
+.bullet-text h1 { font-size: 16px; }
+.bullet-text h2 { font-size: 14px; }
+.bullet-text h3 { font-size: 13px; }
+
+.bullet-text ul, .bullet-text ol { margin: 4px 0; padding-left: 20px; }
+.bullet-text li { margin: 2px 0; }
+
+.bullet-text blockquote {
+  border-left: 2px solid var(--blue);
+  padding-left: 10px;
+  color: var(--text-dim);
+  margin: 6px 0;
+}
+
+.bullet-text a { color: var(--blue); text-decoration: none; }
+
+.bullet-text table { border-collapse: collapse; margin: 6px 0; }
+.bullet-text th, .bullet-text td {
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  text-align: left;
+}
+.bullet-text th { background: var(--bg-light); font-weight: 600; }
