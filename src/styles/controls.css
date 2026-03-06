@@ -1,0 +1,102 @@
+/* Replay screen */
+#replay-screen { display: none; flex: 1; flex-direction: column; height: 100vh; }
+
+/* Controls bar */
+#controls {
+  background: var(--bg-light);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.ctrl-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.ctrl-btn:hover { background: var(--border); }
+.ctrl-btn.active { background: var(--blue); border-color: var(--blue); color: var(--white); }
+
+#speed-display { color: var(--text-dim); font-size: 12px; min-width: 36px; text-align: center; }
+
+#progress-bar {
+  flex: 1;
+  height: 12px;
+  background: var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+#progress-fill {
+  height: 100%;
+  background: var(--blue);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.1s;
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+#progress-ticks {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  pointer-events: none;
+}
+
+.progress-tick {
+  flex: 1;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  position: relative;
+}
+
+.progress-tick:last-child { border-right: none; }
+
+.progress-tick.tick-user {
+  background: rgba(86, 156, 214, 0.15);
+}
+
+.progress-tick.tick-assistant {
+  background: transparent;
+}
+
+#progress-bar:hover .progress-tick {
+  border-right-color: rgba(255,255,255,0.15);
+}
+
+#progress-bar.dragging {
+  cursor: grabbing;
+}
+
+#progress-bar.dragging #progress-fill {
+  transition: none;
+}
+
+.ctrl-sep { width: 1px; height: 20px; background: var(--border); }
+
+#msg-counter { color: var(--text-muted); font-size: 11px; }
+
+#new-file-btn {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-family: inherit; font-size: 11px;
+  padding: 4px 8px; border-radius: 4px;
+}
+#new-file-btn:hover { color: var(--text); background: var(--border); }
