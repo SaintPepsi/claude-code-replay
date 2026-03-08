@@ -13,19 +13,12 @@ describe('escHtml', () => {
     expect(escHtml('a & b')).toBe('a &amp; b');
   });
 
-  it('handles double quotes safely', () => {
-    // Browser's textContent→innerHTML doesn't escape quotes (they're safe in text nodes)
-    const result = escHtml('"quoted"');
-    // Roundtrip: setting innerHTML with result should yield original text
-    const div = document.createElement('div');
-    div.innerHTML = result;
-    expect(div.textContent).toBe('"quoted"');
+  it('escapes double quotes', () => {
+    expect(escHtml('"quoted"')).toBe('&quot;quoted&quot;');
   });
 
   it('escapes single quotes', () => {
-    const result = escHtml("it's");
-    expect(result).toContain('it');
-    expect(result).toContain('s');
+    expect(escHtml("it's")).toBe("it&#39;s");
   });
 
   it('escapes script tags', () => {
@@ -40,13 +33,7 @@ describe('escHtml', () => {
 
   it('handles multiple special characters together', () => {
     const result = escHtml('<a href="x">&</a>');
-    expect(result).toContain('&lt;');
-    expect(result).toContain('&gt;');
-    expect(result).toContain('&amp;');
-    // Roundtrip preserves original
-    const div = document.createElement('div');
-    div.innerHTML = result;
-    expect(div.textContent).toBe('<a href="x">&</a>');
+    expect(result).toBe('&lt;a href=&quot;x&quot;&gt;&amp;&lt;/a&gt;');
   });
 
   it('handles newlines and whitespace', () => {

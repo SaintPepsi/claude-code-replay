@@ -31,4 +31,10 @@ export class ProgressBar {
   setDragging(dragging: boolean): void {
     this.progressBar.classList.toggle('dragging', dragging);
   }
+
+  getProgressIndex(e: MouseEvent, messageCount: number): number {
+    const rect = this.progressBar.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    return Math.round(pct * messageCount);
+  }
 }

@@ -11,14 +11,34 @@ function tryParseJSON(line: string): Result<RawEntry, string> {
   return ok(parsed.value as RawEntry);
 }
 
+export interface ParseResult {
+  conversation: ParsedConversation;
+  skippedLines: number;
+}
+
 export function parseJSONLSafe(text: string): Result<ParsedConversation, string> {
+  const { conversation, skippedLines } = parseJSONLFull(text);
+  if (conversation.messages.length === 0 && skippedLines > 0) {
+    return err(`No valid JSONL entries found (${skippedLines} lines skipped)`);
+  }
+  if (conversation.messages.length === 0) {
+    return err('No valid JSONL entries found');
+  }
+  return ok(conversation);
+}
+
+export function parseJSONLFull(text: string): ParseResult {
   const lines = text.trim().split('\n');
   const parsed: RawEntry[] = [];
   let sessionInfo: SessionInfo = {};
+  let skippedLines = 0;
 
   for (const line of lines) {
     const result = tryParseJSON(line);
-    if (!result.ok) continue;
+    if (!result.ok) {
+      skippedLines++;
+      continue;
+    }
     const obj = result.value;
     parsed.push(obj);
     if (!sessionInfo.sessionId && obj.sessionId) {
@@ -32,10 +52,10 @@ export function parseJSONLSafe(text: string): Result<ParsedConversation, string>
   }
 
   if (parsed.length === 0) {
-    return err('No valid JSONL entries found');
+    return { conversation: { messages: [], sessionInfo: {} }, skippedLines };
   }
 
-  const conversation: UserMessage[] = [];
+  const userMessages: UserMessage[] = [];
   const toolResultMap = new Map<string, ToolResult>();
 
   // First pass: collect tool results
@@ -64,7 +84,7 @@ export function parseJSONLSafe(text: string): Result<ParsedConversation, string>
     if (entry.type === 'user' && entry.message) {
       const content = entry.message.content;
       if (typeof content === 'string' && content.trim()) {
-        conversation.push({
+        userMessages.push({
           type: 'user',
           text: content,
           timestamp: entry.timestamp || '',
@@ -109,11 +129,11 @@ export function parseJSONLSafe(text: string): Result<ParsedConversation, string>
   }
 
   const assistantMsgs = Array.from(assistantGroups.values()).filter((m) => m.content.length > 0);
-  const allMsgs: Message[] = [...conversation, ...assistantMsgs].sort(
+  const allMsgs: Message[] = [...userMessages, ...assistantMsgs].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
-  return ok({ messages: allMsgs, sessionInfo });
+  return { conversation: { messages: allMsgs, sessionInfo }, skippedLines };
 }
 
 export function parseJSONL(text: string): ParsedConversation {

@@ -43,7 +43,7 @@ export class ScrollManager {
 
   scrollToElement(element: Element): void {
     this.programmatic = true;
-    element.scrollIntoView({ block: 'start', behavior: 'instant' as ScrollBehavior });
+    element.scrollIntoView({ block: 'start', behavior: 'instant' });
     this.programmatic = false;
   }
 

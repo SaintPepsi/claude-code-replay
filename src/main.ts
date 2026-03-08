@@ -99,13 +99,13 @@ progressBarEl.addEventListener('mousedown', (e) => {
   if (playback.getMessageCount() === 0) return;
   dragging = true;
   progressBar.setDragging(true);
-  playback.seekTo(playback.getProgressIndex(e, progressBarEl));
+  playback.seekTo(progressBar.getProgressIndex(e, playback.getMessageCount()));
   e.preventDefault();
 });
 
 document.addEventListener('mousemove', (e) => {
   if (!dragging) return;
-  playback.seekTo(playback.getProgressIndex(e, progressBarEl));
+  playback.seekTo(progressBar.getProgressIndex(e, playback.getMessageCount()));
 });
 
 document.addEventListener('mouseup', () => {

@@ -12,26 +12,25 @@ export class TaskManager {
   }
 
   handleTaskTool(block: ContentBlock): void {
-    const input = block.input || {};
+    const input = block.input;
+    if (!input) return;
 
     if (block.name === 'TaskCreate') {
       this.taskCounter++;
       const id = String(this.taskCounter);
-      this.taskState.set(id, {
-        subject: (input.subject as string) || 'Untitled',
-        status: 'pending',
-        activeForm: (input.activeForm as string) || '',
-      });
+      const subject = typeof input.subject === 'string' ? input.subject : 'Untitled';
+      const activeForm = typeof input.activeForm === 'string' ? input.activeForm : '';
+      this.taskState.set(id, { subject, status: 'pending', activeForm });
     } else if (block.name === 'TaskUpdate') {
-      const id = input.taskId as string;
-      if (this.taskState.has(id)) {
-        const task = this.taskState.get(id)!;
+      const taskId = typeof input.taskId === 'string' ? input.taskId : '';
+      if (this.taskState.has(taskId)) {
+        const task = this.taskState.get(taskId)!;
         if (input.status === 'deleted') {
-          this.taskState.delete(id);
+          this.taskState.delete(taskId);
         } else {
-          if (input.status) task.status = input.status as TaskItem['status'];
-          if (input.subject) task.subject = input.subject as string;
-          if (input.activeForm) task.activeForm = input.activeForm as string;
+          if (typeof input.status === 'string') task.status = input.status as TaskItem['status'];
+          if (typeof input.subject === 'string') task.subject = input.subject;
+          if (typeof input.activeForm === 'string') task.activeForm = input.activeForm;
         }
       }
     }

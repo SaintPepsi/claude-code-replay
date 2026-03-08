@@ -1,7 +1,4 @@
 import type { Message, IRenderer } from '../types';
-import { isTaskTool } from '../parser/tool-summary';
-import { md } from '../utils/markdown';
-import { div, span, toFragment } from '../utils/dom';
 import {
   TEXT_BLOCK_DELAY_MS,
   TEXT_BLOCK_MIN_DELAY_MS,
@@ -18,8 +15,11 @@ import {
   SPEEDS,
   DEFAULT_SPEED_INDEX,
 } from '../config';
+import { isTaskTool } from '../parser/tool-summary';
+import { div, span, toFragment } from '../utils/dom';
 import { TaskManager } from './task-manager';
 import { AnimationEngine } from './animation-engine';
+import { StatusDisplay } from './status-display';
 
 /** Explicit playback states (TASK-207) — replaces ad-hoc boolean flags */
 export enum PlaybackState {
@@ -42,15 +42,7 @@ export class PlaybackController {
   private renderer: IRenderer;
   private taskManager: TaskManager;
   private animationEngine: AnimationEngine;
-
-  // DOM refs
-  private progressFill: HTMLElement;
-  private msgCounter: HTMLElement;
-  private statusDot: HTMLElement;
-  private statusTextEl: HTMLElement;
-  private speedDisplay: HTMLElement;
-  private btnPlay: HTMLButtonElement;
-  private btnRealtime: HTMLButtonElement;
+  private display: StatusDisplay;
 
   constructor(
     renderer: IRenderer,
@@ -69,13 +61,7 @@ export class PlaybackController {
     this.renderer = renderer;
     this.taskManager = taskManager;
     this.animationEngine = animationEngine || new AnimationEngine();
-    this.progressFill = elements.progressFill;
-    this.msgCounter = elements.msgCounter;
-    this.statusDot = elements.statusDot;
-    this.statusTextEl = elements.statusTextEl;
-    this.speedDisplay = elements.speedDisplay;
-    this.btnPlay = elements.btnPlay;
-    this.btnRealtime = elements.btnRealtime;
+    this.display = new StatusDisplay(elements);
   }
 
   setMessages(msgs: Message[]): void {
@@ -110,20 +96,11 @@ export class PlaybackController {
   }
 
   private updateProgress(): void {
-    const pct = this.messages.length > 0 ? (this.currentIndex / this.messages.length) * 100 : 0;
-    this.progressFill.style.width = pct + '%';
-    this.msgCounter.textContent = `${this.currentIndex}/${this.messages.length}`;
-  }
-
-  private updateStatus(state: string, text: string): void {
-    this.statusDot.className = 'status-dot ' + state;
-    this.statusTextEl.textContent = text;
+    this.display.updateProgress(this.currentIndex, this.messages.length);
   }
 
   updatePlayButton(): void {
-    const playing = this.state === PlaybackState.Playing;
-    this.btnPlay.innerHTML = playing ? '&#10074;&#10074; Pause' : '&#9654; Play';
-    this.btnPlay.classList.toggle('active', playing);
+    this.display.updatePlayButton(this.state === PlaybackState.Playing);
   }
 
   seekTo(targetIndex: number): void {
@@ -152,22 +129,16 @@ export class PlaybackController {
     this.currentIndex = targetIndex;
     this.updateProgress();
     this.transition(PlaybackState.Paused);
-    this.updateStatus('paused', 'Paused');
+    this.display.updateStatus('paused', 'Paused');
     this.renderer.disableAutoScroll();
     this.renderer.scrollToLast();
-  }
-
-  getProgressIndex(e: MouseEvent, progressBar: HTMLElement): number {
-    const rect = progressBar.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    return Math.round(pct * this.messages.length);
   }
 
   private async showMessage(index: number, gen: number): Promise<void> {
     if (index >= this.messages.length) {
       this.transition(PlaybackState.Paused);
       this.updatePlayButton();
-      this.updateStatus('idle', 'Complete');
+      this.display.updateStatus('idle', 'Complete');
       return;
     }
 
@@ -179,7 +150,7 @@ export class PlaybackController {
     const msg = this.messages[index];
 
     if (msg.type === 'user') {
-      this.updateStatus('active', 'Typing...');
+      this.display.updateStatus('active', 'Typing...');
 
       const el = div('msg-user');
       const prompt = span('user-prompt', '❯');
@@ -213,11 +184,8 @@ export class PlaybackController {
         }
 
         if (block.type === 'text' && block.text) {
-          this.updateStatus('active', 'Responding...');
-
-          const el = div('assistant-block bullet-text');
-          el.innerHTML = '<span class="bullet">●</span>' + md(block.text);
-          this.renderer.appendFragment(toFragment(el));
+          this.display.updateStatus('active', 'Responding...');
+          this.renderer.renderBlockInstant(block);
           this.renderer.autoScroll();
           if (cancelled()) continue;
           await new Promise((r) => setTimeout(r, Math.max(TEXT_BLOCK_MIN_DELAY_MS, TEXT_BLOCK_DELAY_MS / this.speed)));
@@ -231,7 +199,7 @@ export class PlaybackController {
           }
 
           this.renderer.renderToolCall(block);
-          this.updateStatus('active', `${block.name}...`);
+          this.display.updateStatus('active', `${block.name}...`);
           if (cancelled()) {
             if (block.result) this.renderer.renderToolResult(block.result);
             continue;
@@ -253,7 +221,7 @@ export class PlaybackController {
       this.renderer.autoScroll();
 
       if (cancelled()) return;
-      this.updateStatus('idle', 'Idle');
+      this.display.updateStatus('idle', 'Idle');
       await new Promise((r) => setTimeout(r, Math.max(POST_ASSISTANT_MIN_DELAY_MS, POST_ASSISTANT_DELAY_MS / this.speed)));
     }
 
@@ -275,7 +243,7 @@ export class PlaybackController {
     if (index >= this.messages.length) {
       this.transition(PlaybackState.Paused);
       this.updatePlayButton();
-      this.updateStatus('idle', 'Complete');
+      this.display.updateStatus('idle', 'Complete');
       return;
     }
     for (let i = index; i < this.messages.length; i++) {
@@ -283,7 +251,7 @@ export class PlaybackController {
       if (this.realTimeMode && i > index) {
         const delay = this.getRealTimeDelay(i - 1, i);
         if (delay > 0) {
-          this.updateStatus('active', `Next in ${(delay / 1000).toFixed(1)}s...`);
+          this.display.updateStatus('active', `Next in ${(delay / 1000).toFixed(1)}s...`);
           await new Promise((r) => setTimeout(r, delay));
           if (this.state !== PlaybackState.Playing || gen !== this.playGeneration) break;
         }
@@ -308,11 +276,13 @@ export class PlaybackController {
     this.updatePlayButton();
 
     if (this.state === PlaybackState.Playing) {
-      this.updateStatus('active', 'Playing...');
+      this.display.updateStatus('active', 'Playing...');
       this.renderer.enableAutoScroll();
-      this.playFrom(this.currentIndex, gen).catch(() => {/* cancelled */});
+      this.playFrom(this.currentIndex, gen).catch((e) => {
+        if (gen === this.playGeneration) console.error('Playback error:', e);
+      });
     } else {
-      this.updateStatus('paused', 'Paused');
+      this.display.updateStatus('paused', 'Paused');
     }
   }
 
@@ -329,25 +299,25 @@ export class PlaybackController {
     if (gen === this.playGeneration) {
       this.transition(PlaybackState.Paused);
       this.updatePlayButton();
-      this.updateStatus('paused', 'Paused');
+      this.display.updateStatus('paused', 'Paused');
     }
   }
 
   slower(): void {
     if (this.speedIdx > 0) this.speedIdx--;
     this.speed = SPEEDS[this.speedIdx];
-    this.speedDisplay.textContent = this.speed + 'x';
+    this.display.updateSpeed(this.speedIdx);
   }
 
   faster(): void {
     if (this.speedIdx < SPEEDS.length - 1) this.speedIdx++;
     this.speed = SPEEDS[this.speedIdx];
-    this.speedDisplay.textContent = this.speed + 'x';
+    this.display.updateSpeed(this.speedIdx);
   }
 
   toggleRealtime(): void {
     this.realTimeMode = !this.realTimeMode;
-    this.btnRealtime.classList.toggle('active', this.realTimeMode);
+    this.display.toggleRealtime(this.realTimeMode);
   }
 
   reset(): void {

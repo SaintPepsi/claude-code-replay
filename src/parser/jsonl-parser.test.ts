@@ -1,4 +1,5 @@
 import { parseJSONL } from './jsonl-parser';
+import type { AssistantMessage, UserMessage } from '../types';
 
 describe('parseJSONL', () => {
   describe('user messages', () => {
@@ -12,7 +13,8 @@ describe('parseJSONL', () => {
       const result = parseJSONL(input);
       expect(result.messages).toHaveLength(1);
       expect(result.messages[0].type).toBe('user');
-      expect((result.messages[0] as any).text).toBe('Hello world');
+      const msg = result.messages[0] as UserMessage;
+      expect(msg.text).toBe('Hello world');
     });
 
     it('skips user messages with only tool_result content arrays', () => {
@@ -45,7 +47,7 @@ describe('parseJSONL', () => {
       });
       const result = parseJSONL(input);
       expect(result.messages).toHaveLength(1);
-      const msg = result.messages[0] as any;
+      const msg = result.messages[0] as AssistantMessage;
       expect(msg.type).toBe('assistant');
       expect(msg.content[0].text).toBe('I will help you.');
       expect(msg.model).toBe('claude-3');
@@ -64,10 +66,10 @@ describe('parseJSONL', () => {
         requestId: 'r1',
       });
       const result = parseJSONL(input);
-      const msg = result.messages[0] as any;
+      const msg = result.messages[0] as AssistantMessage;
       expect(msg.content[0].type).toBe('tool_use');
       expect(msg.content[0].name).toBe('Bash');
-      expect(msg.content[0].input.command).toBe('ls');
+      expect(msg.content[0].input?.command).toBe('ls');
     });
   });
 
@@ -97,10 +99,11 @@ describe('parseJSONL', () => {
       ].join('\n');
 
       const result = parseJSONL(lines);
-      const assistantMsg = result.messages.find((m) => m.type === 'assistant') as any;
-      expect(assistantMsg.content[0].result).toBeTruthy();
-      expect(assistantMsg.content[0].result.content).toBe('file.txt');
-      expect(assistantMsg.content[0].result.stdout).toBe('file.txt\n');
+      const assistantMsg = result.messages.find((m): m is AssistantMessage => m.type === 'assistant');
+      expect(assistantMsg).toBeDefined();
+      expect(assistantMsg!.content[0].result).toBeTruthy();
+      expect(assistantMsg!.content[0].result?.content).toBe('file.txt');
+      expect(assistantMsg!.content[0].result?.stdout).toBe('file.txt\n');
     });
 
     it('sets result to null when no matching tool result exists', () => {
@@ -115,7 +118,7 @@ describe('parseJSONL', () => {
         requestId: 'r1',
       });
       const result = parseJSONL(input);
-      const msg = result.messages[0] as any;
+      const msg = result.messages[0] as AssistantMessage;
       expect(msg.content[0].result).toBeNull();
     });
   });
@@ -193,10 +196,10 @@ describe('parseJSONL', () => {
       ].join('\n');
 
       const result = parseJSONL(lines);
-      const assistantMsgs = result.messages.filter((m) => m.type === 'assistant');
+      const assistantMsgs = result.messages.filter((m): m is AssistantMessage => m.type === 'assistant');
       expect(assistantMsgs).toHaveLength(1);
-      expect((assistantMsgs[0] as any).content).toHaveLength(1);
-      expect((assistantMsgs[0] as any).content[0].text).toBe('Hello, world!');
+      expect(assistantMsgs[0].content).toHaveLength(1);
+      expect(assistantMsgs[0].content[0].text).toBe('Hello, world!');
     });
 
     it('deduplicates tool_use blocks by id', () => {
@@ -220,9 +223,9 @@ describe('parseJSONL', () => {
       ].join('\n');
 
       const result = parseJSONL(lines);
-      const assistantMsgs = result.messages.filter((m) => m.type === 'assistant');
+      const assistantMsgs = result.messages.filter((m): m is AssistantMessage => m.type === 'assistant');
       expect(assistantMsgs).toHaveLength(1);
-      expect((assistantMsgs[0] as any).content).toHaveLength(1);
+      expect(assistantMsgs[0].content).toHaveLength(1);
     });
   });
 
