@@ -109,18 +109,6 @@ export class PlaybackController {
     this.state = to;
   }
 
-  private get playing(): boolean {
-    return this.state === PlaybackState.Playing;
-  }
-
-  private set playing(value: boolean) {
-    if (value) {
-      this.transition(PlaybackState.Playing);
-    } else if (this.state === PlaybackState.Playing) {
-      this.transition(PlaybackState.Paused);
-    }
-  }
-
   private updateProgress(): void {
     const pct = this.messages.length > 0 ? (this.currentIndex / this.messages.length) * 100 : 0;
     this.progressFill.style.width = pct + '%';
@@ -133,9 +121,9 @@ export class PlaybackController {
   }
 
   updatePlayButton(): void {
-    const isPlaying = this.playing;
-    this.btnPlay.innerHTML = isPlaying ? '&#10074;&#10074; Pause' : '&#9654; Play';
-    this.btnPlay.classList.toggle('active', isPlaying);
+    const playing = this.state === PlaybackState.Playing;
+    this.btnPlay.innerHTML = playing ? '&#10074;&#10074; Pause' : '&#9654; Play';
+    this.btnPlay.classList.toggle('active', playing);
   }
 
   seekTo(targetIndex: number): void {
@@ -177,7 +165,7 @@ export class PlaybackController {
 
   private async showMessage(index: number, gen: number): Promise<void> {
     if (index >= this.messages.length) {
-      this.playing = false;
+      this.transition(PlaybackState.Paused);
       this.updatePlayButton();
       this.updateStatus('idle', 'Complete');
       return;
@@ -285,19 +273,19 @@ export class PlaybackController {
 
   private async playFrom(index: number, gen: number): Promise<void> {
     if (index >= this.messages.length) {
-      this.playing = false;
+      this.transition(PlaybackState.Paused);
       this.updatePlayButton();
       this.updateStatus('idle', 'Complete');
       return;
     }
     for (let i = index; i < this.messages.length; i++) {
-      if (!this.playing || gen !== this.playGeneration) break;
+      if (this.state !== PlaybackState.Playing || gen !== this.playGeneration) break;
       if (this.realTimeMode && i > index) {
         const delay = this.getRealTimeDelay(i - 1, i);
         if (delay > 0) {
           this.updateStatus('active', `Next in ${(delay / 1000).toFixed(1)}s...`);
           await new Promise((r) => setTimeout(r, delay));
-          if (!this.playing || gen !== this.playGeneration) break;
+          if (this.state !== PlaybackState.Playing || gen !== this.playGeneration) break;
         }
       }
       this.activeShowMessage = this.showMessage(i, gen);
@@ -310,9 +298,16 @@ export class PlaybackController {
     const gen = ++this.playGeneration;
     if (this.activeShowMessage) await this.activeShowMessage;
     if (gen !== this.playGeneration) return;
-    this.playing = !this.playing;
+
+    if (this.state === PlaybackState.Playing) {
+      this.transition(PlaybackState.Paused);
+    } else {
+      this.transition(PlaybackState.Playing);
+    }
+
     this.updatePlayButton();
-    if (this.playing) {
+
+    if (this.state === PlaybackState.Playing) {
       this.updateStatus('active', 'Playing...');
       this.renderer.enableAutoScroll();
       this.playFrom(this.currentIndex, gen).catch(() => {/* cancelled */});
@@ -325,14 +320,14 @@ export class PlaybackController {
     const gen = ++this.playGeneration;
     if (this.activeShowMessage) await this.activeShowMessage;
     if (gen !== this.playGeneration) return;
-    this.playing = true;
+    this.transition(PlaybackState.Playing);
     this.updatePlayButton();
     this.renderer.enableAutoScroll();
     this.activeShowMessage = this.showMessage(this.currentIndex, gen);
     await this.activeShowMessage;
     this.activeShowMessage = null;
     if (gen === this.playGeneration) {
-      this.playing = false;
+      this.transition(PlaybackState.Paused);
       this.updatePlayButton();
       this.updateStatus('paused', 'Paused');
     }

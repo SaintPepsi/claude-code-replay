@@ -1,34 +1,38 @@
 import type { RawEntry, Message, UserMessage, AssistantMessage, ToolResult, ParsedConversation, SessionInfo } from '../types';
-import { ok, err, type Result } from '../utils/result';
+import { ok, err, safeJsonParse } from '../utils/result';
+import type { Result } from '../utils/result';
 
-export function parseJSONLSafe(text: string): Result<ParsedConversation, string> {
-  try {
-    return ok(parseJSONL(text));
-  } catch (e) {
-    return err(e instanceof Error ? e.message : String(e));
-  }
+function tryParseJSON(line: string): Result<RawEntry, string> {
+  const trimmed = line.trim();
+  if (!trimmed) return err('empty line');
+  if (trimmed[0] !== '{') return err('not JSON object');
+  const parsed = safeJsonParse(trimmed);
+  if (!parsed.ok) return parsed;
+  return ok(parsed.value as RawEntry);
 }
 
-export function parseJSONL(text: string): ParsedConversation {
+export function parseJSONLSafe(text: string): Result<ParsedConversation, string> {
   const lines = text.trim().split('\n');
   const parsed: RawEntry[] = [];
   let sessionInfo: SessionInfo = {};
 
   for (const line of lines) {
-    try {
-      const obj = JSON.parse(line) as RawEntry;
-      parsed.push(obj);
-      if (!sessionInfo.sessionId && obj.sessionId) {
-        sessionInfo = {
-          sessionId: obj.sessionId,
-          version: obj.version,
-          gitBranch: obj.gitBranch,
-          cwd: obj.cwd,
-        };
-      }
-    } catch (_e) {
-      // Skip malformed lines
+    const result = tryParseJSON(line);
+    if (!result.ok) continue;
+    const obj = result.value;
+    parsed.push(obj);
+    if (!sessionInfo.sessionId && obj.sessionId) {
+      sessionInfo = {
+        sessionId: obj.sessionId,
+        version: obj.version,
+        gitBranch: obj.gitBranch,
+        cwd: obj.cwd,
+      };
     }
+  }
+
+  if (parsed.length === 0) {
+    return err('No valid JSONL entries found');
   }
 
   const conversation: UserMessage[] = [];
@@ -109,5 +113,13 @@ export function parseJSONL(text: string): ParsedConversation {
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
-  return { messages: allMsgs, sessionInfo };
+  return ok({ messages: allMsgs, sessionInfo });
+}
+
+export function parseJSONL(text: string): ParsedConversation {
+  const result = parseJSONLSafe(text);
+  if (!result.ok) {
+    return { messages: [], sessionInfo: {} };
+  }
+  return result.value;
 }

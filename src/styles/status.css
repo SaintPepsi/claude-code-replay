@@ -42,3 +42,4 @@
 .status-dot.active { background: var(--green); }
 .status-dot.paused { background: var(--amber); }
 .status-dot.idle { background: var(--text-muted); }
+.status-spacer { flex: 1; }

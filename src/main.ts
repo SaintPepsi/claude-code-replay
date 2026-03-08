@@ -7,7 +7,7 @@ import './styles/tools.css';
 import './styles/status.css';
 import './styles/tasks.css';
 
-import type { ParsedConversation, IRenderer } from './types';
+import type { ParsedConversation, AssistantMessage, IRenderer } from './types';
 import { TaskManager } from './components/task-manager';
 import { ChatRenderer } from './components/chat-renderer';
 import { PlaybackController } from './components/playback-controller';
@@ -65,7 +65,7 @@ function handleFileLoad(result: ParsedConversation): void {
 
   const info = result.sessionInfo;
   const assistantWithModel = result.messages.find(
-    (m): m is import('./types').AssistantMessage => m.type === 'assistant' && !!m.model
+    (m): m is AssistantMessage => m.type === 'assistant' && !!m.model
   );
   statusModel.textContent = assistantWithModel?.model || '';
   statusBranch.textContent = info.gitBranch || '';

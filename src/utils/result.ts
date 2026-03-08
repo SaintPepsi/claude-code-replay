@@ -34,3 +34,9 @@ export function unwrapOr<T, E>(result: Result<T, E>, defaultValue: T): T {
   if (result.ok) return result.value;
   return defaultValue;
 }
+
+/** Safely parse JSON without throwing. Returns Result. */
+// eslint-disable-next-line -- try-catch required: JSON.parse has no non-throwing API
+export function safeJsonParse(text: string): Result<unknown, string> {
+  try { return ok(JSON.parse(text)); } catch (e) { return err(e instanceof Error ? e.message : 'parse error'); }
+}
