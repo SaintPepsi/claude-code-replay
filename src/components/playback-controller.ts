@@ -1,11 +1,8 @@
-import type { Message } from '../types';
+import type { Message, IRenderer } from '../types';
 import { isTaskTool } from '../parser/tool-summary';
 import { md } from '../utils/markdown';
 import { div, span, toFragment } from '../utils/dom';
 import {
-  TYPING_CHUNK_SIZE,
-  TYPING_CHAR_DELAY_MS,
-  TYPING_POST_DELAY_MS,
   TEXT_BLOCK_DELAY_MS,
   TEXT_BLOCK_MIN_DELAY_MS,
   TOOL_CALL_DELAY_MS,
@@ -21,21 +18,30 @@ import {
   SPEEDS,
   DEFAULT_SPEED_INDEX,
 } from '../config';
-import { ChatRenderer } from './chat-renderer';
 import { TaskManager } from './task-manager';
+import { AnimationEngine } from './animation-engine';
+
+/** Explicit playback states (TASK-207) — replaces ad-hoc boolean flags */
+export enum PlaybackState {
+  Idle = 'idle',
+  Playing = 'playing',
+  Paused = 'paused',
+  Seeking = 'seeking',
+}
 
 export class PlaybackController {
   private messages: Message[] = [];
   private currentIndex = 0;
-  private playing = false;
+  private state: PlaybackState = PlaybackState.Idle;
   private speed = 1;
   private speedIdx = DEFAULT_SPEED_INDEX;
   private realTimeMode = false;
   private playGeneration = 0;
   private activeShowMessage: Promise<void> | null = null;
 
-  private renderer: ChatRenderer;
+  private renderer: IRenderer;
   private taskManager: TaskManager;
+  private animationEngine: AnimationEngine;
 
   // DOM refs
   private progressFill: HTMLElement;
@@ -47,7 +53,7 @@ export class PlaybackController {
   private btnRealtime: HTMLButtonElement;
 
   constructor(
-    renderer: ChatRenderer,
+    renderer: IRenderer,
     taskManager: TaskManager,
     elements: {
       progressFill: HTMLElement;
@@ -57,10 +63,12 @@ export class PlaybackController {
       speedDisplay: HTMLElement;
       btnPlay: HTMLButtonElement;
       btnRealtime: HTMLButtonElement;
-    }
+    },
+    animationEngine?: AnimationEngine,
   ) {
     this.renderer = renderer;
     this.taskManager = taskManager;
+    this.animationEngine = animationEngine || new AnimationEngine();
     this.progressFill = elements.progressFill;
     this.msgCounter = elements.msgCounter;
     this.statusDot = elements.statusDot;
@@ -73,7 +81,7 @@ export class PlaybackController {
   setMessages(msgs: Message[]): void {
     this.messages = msgs;
     this.currentIndex = 0;
-    this.playing = false;
+    this.transition(PlaybackState.Idle);
     this.updateProgress();
   }
 
@@ -90,7 +98,27 @@ export class PlaybackController {
   }
 
   isPlaying(): boolean {
-    return this.playing;
+    return this.state === PlaybackState.Playing;
+  }
+
+  getState(): PlaybackState {
+    return this.state;
+  }
+
+  private transition(to: PlaybackState): void {
+    this.state = to;
+  }
+
+  private get playing(): boolean {
+    return this.state === PlaybackState.Playing;
+  }
+
+  private set playing(value: boolean) {
+    if (value) {
+      this.transition(PlaybackState.Playing);
+    } else if (this.state === PlaybackState.Playing) {
+      this.transition(PlaybackState.Paused);
+    }
   }
 
   private updateProgress(): void {
@@ -105,15 +133,16 @@ export class PlaybackController {
   }
 
   updatePlayButton(): void {
-    this.btnPlay.innerHTML = this.playing ? '&#10074;&#10074; Pause' : '&#9654; Play';
-    this.btnPlay.classList.toggle('active', this.playing);
+    const isPlaying = this.playing;
+    this.btnPlay.innerHTML = isPlaying ? '&#10074;&#10074; Pause' : '&#9654; Play';
+    this.btnPlay.classList.toggle('active', isPlaying);
   }
 
   seekTo(targetIndex: number): void {
     targetIndex = Math.max(0, Math.min(targetIndex, this.messages.length));
 
     this.playGeneration++;
-    this.playing = false;
+    this.transition(PlaybackState.Seeking);
     this.updatePlayButton();
 
     if (targetIndex <= this.currentIndex) {
@@ -134,6 +163,7 @@ export class PlaybackController {
 
     this.currentIndex = targetIndex;
     this.updateProgress();
+    this.transition(PlaybackState.Paused);
     this.updateStatus('paused', 'Paused');
     this.renderer.disableAutoScroll();
     this.renderer.scrollToLast();
@@ -172,29 +202,15 @@ export class PlaybackController {
       this.renderer.appendFragment(toFragment(el));
       this.renderer.autoScroll();
 
-      const cursor = document.createElement('span');
-      cursor.className = 'typing-cursor';
-      textSpan.appendChild(cursor);
+      const completed = await this.animationEngine.typeText(
+        textSpan,
+        msg.text,
+        this.speed,
+        cancelled,
+        () => this.renderer.autoScroll(),
+      );
 
-      const text = msg.text;
-      let interrupted = false;
-      for (let i = 0; i < text.length; i += TYPING_CHUNK_SIZE) {
-        if (cancelled()) { interrupted = true; break; }
-        textSpan.insertBefore(document.createTextNode(text.slice(i, i + TYPING_CHUNK_SIZE)), cursor);
-        this.renderer.autoScroll();
-        await new Promise((r) => setTimeout(r, TYPING_CHAR_DELAY_MS / this.speed));
-      }
-
-      if (interrupted) {
-        cursor.remove();
-        textSpan.textContent = msg.text;
-        this.renderer.autoScroll();
-        return;
-      }
-
-      cursor.remove();
-      if (cancelled()) return;
-      await new Promise((r) => setTimeout(r, TYPING_POST_DELAY_MS / this.speed));
+      if (!completed) return;
     } else if (msg.type === 'assistant') {
       const startTime = Date.now();
 
@@ -343,7 +359,7 @@ export class PlaybackController {
     this.playGeneration++;
     this.messages = [];
     this.currentIndex = 0;
-    this.playing = false;
+    this.transition(PlaybackState.Idle);
     this.updatePlayButton();
     this.updateProgress();
   }

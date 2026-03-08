@@ -68,6 +68,23 @@ export interface TaskItem {
   activeForm: string;
 }
 
+/** IRenderer interface — decouples rendering consumers from concrete implementations (TASK-204) */
+export interface IRenderer {
+  renderUserInstant(msg: UserMessage, target?: HTMLElement | DocumentFragment): void;
+  renderAssistantInstant(msg: AssistantMessage, target?: HTMLElement | DocumentFragment): void;
+  renderMessageInstant(msg: Message, target?: HTMLElement | DocumentFragment): void;
+  renderBlockInstant(block: ContentBlock, target?: HTMLElement | DocumentFragment): void;
+  renderToolCall(block: ContentBlock, target?: HTMLElement | DocumentFragment): void;
+  renderToolResult(result: ToolResult, target?: HTMLElement | DocumentFragment): void;
+  appendFragment(frag: DocumentFragment): void;
+  autoScroll(): void;
+  enableAutoScroll(): void;
+  disableAutoScroll(): void;
+  scrollToLast(): void;
+  clear(): void;
+  destroy(): void;
+}
+
 export interface RawEntry {
   type?: string;
   message?: {

@@ -7,7 +7,7 @@ import './styles/tools.css';
 import './styles/status.css';
 import './styles/tasks.css';
 
-import type { ParsedConversation } from './types';
+import type { ParsedConversation, IRenderer } from './types';
 import { TaskManager } from './components/task-manager';
 import { ChatRenderer } from './components/chat-renderer';
 import { PlaybackController } from './components/playback-controller';
@@ -43,7 +43,7 @@ const statusBranch = document.getElementById('status-branch')!;
 
 // --- Initialize Components ---
 const taskManager = new TaskManager(taskPanel);
-const renderer = new ChatRenderer(chat, chatInner, taskManager);
+const renderer: IRenderer = new ChatRenderer(chat, chatInner, taskManager);
 const progressBar = new ProgressBar(progressBarEl, progressTicksEl);
 
 const playback = new PlaybackController(renderer, taskManager, {
