@@ -86,7 +86,7 @@ describe('md', () => {
   describe('links', () => {
     it('renders [label](url) as anchor tag', () => {
       const result = md('[click here](https://example.com)');
-      expect(result).toContain('<a href="https://example.com" target="_blank">click here</a>');
+      expect(result).toContain('<a href="https://example.com" target="_blank" rel="noopener noreferrer">click here</a>');
     });
 
     it('handles URLs with & in them', () => {
@@ -145,3 +145,35 @@ describe('md', () => {
     });
   });
 });
+
+  describe('XSS prevention', () => {
+    it('strips javascript: protocol links', () => {
+      const result = md('[click](javascript:alert(1))');
+      expect(result).not.toContain('javascript:');
+      expect(result).toContain('click');
+    });
+
+    it('strips javascript: with mixed case', () => {
+      const result = md('[click](JavaScript:alert(1))');
+      expect(result).not.toContain('javascript');
+      expect(result).not.toContain('JavaScript');
+    });
+
+    it('strips javascript: with leading whitespace', () => {
+      const result = md('[click](  javascript:alert(1))');
+      expect(result).not.toContain('javascript:');
+    });
+
+    it('adds rel="noopener noreferrer" to links', () => {
+      const result = md('[link](https://example.com)');
+      expect(result).toContain('rel="noopener noreferrer"');
+    });
+  });
+
+  describe('list wrapping', () => {
+    it('wraps li elements in ul', () => {
+      const result = md('- item one\n- item two');
+      expect(result).toContain('<ul>');
+      expect(result).toContain('</ul>');
+    });
+  });

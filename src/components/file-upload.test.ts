@@ -93,10 +93,8 @@ describe('FileUpload', () => {
 
     expect(onLoad).toHaveBeenCalled();
   });
-
-  it('does not call onLoad when parsing fails', async () => {
+  it('does not call onLoad when parsing fails and shows error in UI', async () => {
     mockParseJSONLSafe.mockReturnValueOnce({ ok: false as const, error: 'parse error' });
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const fileContent = 'invalid content';
     const file = new File([fileContent], 'bad.jsonl', { type: 'text/plain' });
@@ -107,9 +105,11 @@ describe('FileUpload', () => {
     await new Promise((r) => setTimeout(r, 50));
 
     expect(onLoad).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith('Failed to parse JSONL:', 'parse error');
-    consoleSpy.mockRestore();
+    const errorEl = dropZone.querySelector('.upload-error');
+    expect(errorEl).not.toBeNull();
+    expect(errorEl!.textContent).toContain('Failed to parse file');
   });
+
 
   it('onLoad callback is called with parsed result', async () => {
     const fileContent = 'some jsonl content';

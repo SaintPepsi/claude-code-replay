@@ -35,3 +35,10 @@
 #drop-zone .label { color: var(--text-dim); font-size: 13px; }
 #drop-zone .sublabel { color: var(--text-muted); font-size: 11px; }
 #file-input { display: none; }
+
+.upload-error {
+  color: #f44747;
+  font-size: 12px;
+  margin-top: 8px;
+  text-align: center;
+}

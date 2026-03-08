@@ -35,6 +35,9 @@ export function md(text: string): string {
 
   // 8. Unordered lists
   text = text.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
+  if (text.includes('<li>')) {
+    text = text.replace(/((?:<li>.*<\/li>(?:<br>)?)+)/g, '<ul>$1</ul>');
+  }
 
   // 9. Tables
   text = text.replace(/^\|(.+)\|$/gm, (_match: string, inner: string) => {
@@ -48,7 +51,9 @@ export function md(text: string): string {
 
   // 10. Links
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_: string, label: string, url: string) => {
-    return `<a href="${url.replace(/&amp;/g, '&')}" target="_blank">${label}</a>`;
+    const href = url.replace(/&amp;/g, '&');
+    if (/^\s*javascript\s*:/i.test(href)) return label;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
   });
 
   // 11. Line breaks

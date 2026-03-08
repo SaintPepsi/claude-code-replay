@@ -35,12 +35,21 @@ export class FileUpload {
       if (result.ok) {
         this.onLoad(result.value);
       } else {
-        console.error('Failed to parse JSONL:', result.error);
+        this.showError('Failed to parse file: ' + result.error);
       }
     };
     reader.onerror = () => {
-      console.error('Failed to read file:', file.name);
+      this.showError('Failed to read file: ' + file.name);
     };
     reader.readAsText(file);
+  }
+
+  private showError(msg: string): void {
+    const existing = this.dropZone.querySelector('.upload-error');
+    if (existing) existing.remove();
+    const el = document.createElement('div');
+    el.className = 'upload-error';
+    el.textContent = msg;
+    this.dropZone.appendChild(el);
   }
 }
