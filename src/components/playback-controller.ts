@@ -71,7 +71,7 @@ export class PlaybackController {
     this.updateProgress();
   }
 
-  getMessages(): Message[] {
+  getMessages(): readonly Message[] {
     return this.messages;
   }
 
@@ -113,11 +113,13 @@ export class PlaybackController {
     if (targetIndex <= this.currentIndex) {
       this.renderer.clear();
       this.taskManager.reset();
+      this.taskManager.beginBatch();
       const frag = document.createDocumentFragment();
       for (let i = 0; i < targetIndex; i++) {
         this.renderer.renderMessageInstant(this.messages[i], frag);
       }
       this.renderer.appendFragment(frag);
+      this.taskManager.endBatch();
     } else {
       const frag = document.createDocumentFragment();
       for (let i = this.currentIndex; i < targetIndex; i++) {

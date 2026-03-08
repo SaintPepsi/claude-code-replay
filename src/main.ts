@@ -95,6 +95,12 @@ newFileBtn.onclick = () => {
 // --- Progress bar interaction ---
 let dragging = false;
 
+function seekFromClientX(clientX: number): void {
+  const rect = progressBarEl.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  playback.seekTo(Math.round(pct * playback.getMessageCount()));
+}
+
 progressBarEl.addEventListener('mousedown', (e) => {
   if (playback.getMessageCount() === 0) return;
   dragging = true;
@@ -112,6 +118,45 @@ document.addEventListener('mouseup', () => {
   if (!dragging) return;
   dragging = false;
   progressBar.setDragging(false);
+});
+
+// Touch events for mobile
+progressBarEl.addEventListener('touchstart', (e) => {
+  if (playback.getMessageCount() === 0) return;
+  dragging = true;
+  progressBar.setDragging(true);
+  seekFromClientX(e.touches[0].clientX);
+  e.preventDefault();
+}, { passive: false });
+
+document.addEventListener('touchmove', (e) => {
+  if (!dragging) return;
+  seekFromClientX(e.touches[0].clientX);
+});
+
+document.addEventListener('touchend', () => {
+  if (!dragging) return;
+  dragging = false;
+  progressBar.setDragging(false);
+});
+
+// Keyboard a11y for progress bar
+progressBarEl.setAttribute('role', 'slider');
+progressBarEl.setAttribute('tabindex', '0');
+progressBarEl.setAttribute('aria-label', 'Playback progress');
+progressBarEl.setAttribute('aria-valuemin', '0');
+
+progressBarEl.addEventListener('keydown', (e) => {
+  if (playback.getMessageCount() === 0) return;
+  const current = playback.getCurrentIndex();
+  const total = playback.getMessageCount();
+  if (e.key === 'ArrowRight') {
+    playback.seekTo(Math.min(current + 1, total));
+    e.preventDefault();
+  } else if (e.key === 'ArrowLeft') {
+    playback.seekTo(Math.max(current - 1, 0));
+    e.preventDefault();
+  }
 });
 
 // --- Keyboard shortcuts ---

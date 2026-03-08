@@ -23,6 +23,7 @@ export class FileUpload {
     };
     this.fileInput.onchange = () => {
       if (this.fileInput.files?.[0]) this.loadFile(this.fileInput.files[0]);
+      this.fileInput.value = '';
     };
   }
 

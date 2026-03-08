@@ -6,6 +6,7 @@ export class TaskManager {
   private taskState: Map<string, TaskItem> = new Map();
   private taskCounter = 0;
   private taskPanel: HTMLElement;
+  private batchMode = false;
 
   constructor(taskPanel: HTMLElement) {
     this.taskPanel = taskPanel;
@@ -28,13 +29,25 @@ export class TaskManager {
         if (input.status === 'deleted') {
           this.taskState.delete(taskId);
         } else {
-          if (typeof input.status === 'string') task.status = input.status as TaskItem['status'];
+          const validStatuses: TaskItem['status'][] = ['pending', 'in_progress', 'completed'];
+          if (typeof input.status === 'string' && validStatuses.includes(input.status as TaskItem['status'])) {
+            task.status = input.status as TaskItem['status'];
+          }
           if (typeof input.subject === 'string') task.subject = input.subject;
           if (typeof input.activeForm === 'string') task.activeForm = input.activeForm;
         }
       }
     }
 
+    if (!this.batchMode) this.renderTaskList();
+  }
+
+  beginBatch(): void {
+    this.batchMode = true;
+  }
+
+  endBatch(): void {
+    this.batchMode = false;
     this.renderTaskList();
   }
 

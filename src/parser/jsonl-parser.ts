@@ -129,8 +129,12 @@ export function parseJSONLFull(text: string): ParseResult {
   }
 
   const assistantMsgs = Array.from(assistantGroups.values()).filter((m) => m.content.length > 0);
+  const safeTime = (s: string): number => {
+    const t = new Date(s).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  };
   const allMsgs: Message[] = [...userMessages, ...assistantMsgs].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    (a, b) => safeTime(a.timestamp) - safeTime(b.timestamp)
   );
 
   return { conversation: { messages: allMsgs, sessionInfo }, skippedLines };

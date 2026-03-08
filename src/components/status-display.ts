@@ -1,5 +1,7 @@
 import { SPEEDS } from '../config';
 
+export type StatusState = 'active' | 'paused' | 'idle';
+
 /**
  * StatusDisplay — encapsulates all playback chrome DOM updates (REVIEW-9).
  * Extracted from PlaybackController to reduce its DOM coupling.
@@ -37,7 +39,7 @@ export class StatusDisplay {
     this.msgCounter.textContent = `${currentIndex}/${total}`;
   }
 
-  updateStatus(state: string, text: string): void {
+  updateStatus(state: StatusState, text: string): void {
     this.statusDot.className = 'status-dot ' + state;
     this.statusTextEl.textContent = text;
   }

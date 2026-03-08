@@ -1,6 +1,8 @@
 import { escHtml } from './escHtml';
 import { redact } from './redact';
 
+const SAFE_URL_RE = /^(?:https?:|mailto:|#|\/)/i;
+
 export function md(text: string): string {
   if (!text) return '';
   text = redact(text);
@@ -49,11 +51,11 @@ export function md(text: string): string {
     text = text.replace(/((?:<tr>.*<\/tr>\n?)+)/g, '<table>$1</table>');
   }
 
-  // 10. Links
+  // 10. Links — allowlist safe protocols, escape href for attribute context
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_: string, label: string, url: string) => {
     const href = url.replace(/&amp;/g, '&');
-    if (/^\s*javascript\s*:/i.test(href)) return label;
-    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    if (!SAFE_URL_RE.test(href.trim())) return label;
+    return `<a href="${escHtml(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
   });
 
   // 11. Line breaks
