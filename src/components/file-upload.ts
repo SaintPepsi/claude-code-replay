@@ -27,7 +27,17 @@ export class FileUpload {
     };
   }
 
+  private static MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
   private loadFile(file: File): void {
+    if (file.size > FileUpload.MAX_FILE_SIZE) {
+      this.showError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is 50MB.`);
+      return;
+    }
+    if (!file.name.endsWith('.jsonl') && !file.name.endsWith('.json')) {
+      this.showError('Please upload a .jsonl or .json file.');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result;

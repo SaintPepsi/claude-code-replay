@@ -71,6 +71,8 @@ function handleFileLoad(result: ParsedConversation): void {
   statusBranch.textContent = info.gitBranch || '';
 
   progressBar.buildTicks(result.messages);
+  progressBarEl.setAttribute('aria-valuemax', String(result.messages.length));
+  progressBarEl.setAttribute('aria-valuenow', '0');
   statusTextEl.textContent = `${result.messages.length} messages loaded`;
 }
 
@@ -94,12 +96,6 @@ newFileBtn.onclick = () => {
 
 // --- Progress bar interaction ---
 let dragging = false;
-
-function seekFromClientX(clientX: number): void {
-  const rect = progressBarEl.getBoundingClientRect();
-  const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-  playback.seekTo(Math.round(pct * playback.getMessageCount()));
-}
 
 progressBarEl.addEventListener('mousedown', (e) => {
   if (playback.getMessageCount() === 0) return;
@@ -125,13 +121,19 @@ progressBarEl.addEventListener('touchstart', (e) => {
   if (playback.getMessageCount() === 0) return;
   dragging = true;
   progressBar.setDragging(true);
-  seekFromClientX(e.touches[0].clientX);
+  playback.seekTo(progressBar.getProgressIndex(
+    { clientX: e.touches[0].clientX } as MouseEvent,
+    playback.getMessageCount(),
+  ));
   e.preventDefault();
 }, { passive: false });
 
 document.addEventListener('touchmove', (e) => {
   if (!dragging) return;
-  seekFromClientX(e.touches[0].clientX);
+  playback.seekTo(progressBar.getProgressIndex(
+    { clientX: e.touches[0].clientX } as MouseEvent,
+    playback.getMessageCount(),
+  ));
 });
 
 document.addEventListener('touchend', () => {

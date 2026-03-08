@@ -37,6 +37,8 @@ export class StatusDisplay {
     const pct = total > 0 ? (currentIndex / total) * 100 : 0;
     this.progressFill.style.width = pct + '%';
     this.msgCounter.textContent = `${currentIndex}/${total}`;
+    const slider = this.progressFill.parentElement;
+    if (slider) slider.setAttribute('aria-valuenow', String(currentIndex));
   }
 
   updateStatus(state: StatusState, text: string): void {

@@ -32,10 +32,14 @@ export function span(className: string, text: string): HTMLSpanElement {
   return s;
 }
 
-export function div(className: string, innerHTML?: string): HTMLDivElement {
+/**
+ * Create a div element. The optional `safeHtml` parameter sets innerHTML directly —
+ * callers MUST ensure the HTML is pre-sanitized (e.g., via escHtml or md).
+ */
+export function div(className: string, safeHtml?: string): HTMLDivElement {
   const d = document.createElement('div');
   d.className = className;
-  if (innerHTML !== undefined) d.innerHTML = innerHTML;
+  if (safeHtml !== undefined) d.innerHTML = safeHtml;
   return d;
 }
 

@@ -15,6 +15,7 @@ export class TaskManager {
   handleTaskTool(block: ContentBlock): void {
     const input = block.input;
     if (!input) return;
+    if (block.name !== 'TaskCreate' && block.name !== 'TaskUpdate') return;
 
     if (block.name === 'TaskCreate') {
       this.taskCounter++;

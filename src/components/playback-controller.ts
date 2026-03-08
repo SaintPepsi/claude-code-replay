@@ -121,11 +121,13 @@ export class PlaybackController {
       this.renderer.appendFragment(frag);
       this.taskManager.endBatch();
     } else {
+      this.taskManager.beginBatch();
       const frag = document.createDocumentFragment();
       for (let i = this.currentIndex; i < targetIndex; i++) {
         this.renderer.renderMessageInstant(this.messages[i], frag);
       }
       this.renderer.appendFragment(frag);
+      this.taskManager.endBatch();
     }
 
     this.currentIndex = targetIndex;
@@ -218,7 +220,10 @@ export class PlaybackController {
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
       const statusEl = div('status-line');
-      statusEl.innerHTML = `<span class="status-icon">✱</span> Worked for ${elapsed}s`;
+      const icon = span('status-icon', '✱');
+      const label = document.createTextNode(` Worked for ${elapsed}s`);
+      statusEl.appendChild(icon);
+      statusEl.appendChild(label);
       this.renderer.appendFragment(toFragment(statusEl));
       this.renderer.autoScroll();
 
