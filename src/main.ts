@@ -14,6 +14,7 @@ import { PlaybackController } from './components/playback-controller';
 import { FileUpload } from './components/file-upload';
 import { ProgressBar } from './components/progress-bar';
 import { KeyboardHandler } from './components/keyboard-handler';
+import { Settings } from './components/settings';
 
 // --- DOM Elements ---
 const uploadScreen = document.getElementById('upload-screen')!;
@@ -23,6 +24,7 @@ const chatInner = document.getElementById('chat-inner')!;
 const taskPanel = document.getElementById('task-panel')!;
 const dropZone = document.getElementById('drop-zone')!;
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
+const autoplayCheckbox = document.getElementById('autoplay-checkbox') as HTMLInputElement;
 
 const btnPlay = document.getElementById('btn-play') as HTMLButtonElement;
 const btnStep = document.getElementById('btn-step') as HTMLButtonElement;
@@ -45,6 +47,14 @@ const statusBranch = document.getElementById('status-branch')!;
 const taskManager = new TaskManager(taskPanel);
 const renderer: IRenderer = new ChatRenderer(chat, chatInner, taskManager);
 const progressBar = new ProgressBar(progressBarEl, progressTicksEl);
+
+const settings = new Settings();
+
+// Sync checkbox with persisted setting
+autoplayCheckbox.checked = settings.autoPlayOnLoad;
+autoplayCheckbox.addEventListener('change', () => {
+  settings.autoPlayOnLoad = autoplayCheckbox.checked;
+});
 
 const playback = new PlaybackController(renderer, taskManager, {
   progressFill,
@@ -74,6 +84,10 @@ function handleFileLoad(result: ParsedConversation): void {
   progressBarEl.setAttribute('aria-valuemax', String(result.messages.length));
   progressBarEl.setAttribute('aria-valuenow', '0');
   statusTextEl.textContent = `${result.messages.length} messages loaded`;
+
+  if (settings.autoPlayOnLoad) {
+    playback.togglePlay();
+  }
 }
 
 new FileUpload(dropZone, fileInput, handleFileLoad);
