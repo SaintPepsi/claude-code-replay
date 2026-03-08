@@ -2,7 +2,7 @@
 
 | Field       | Value                                      |
 |-------------|--------------------------------------------|
-| **Status**  | TODO                                       |
+| **Status**  | DONE                                       |
 | **Priority**| Low                                        |
 | **Assignee**| Unassigned                                 |
 | **Phase**   | 2 - Refactoring into Components            |

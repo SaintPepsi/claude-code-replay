@@ -1,26 +1,29 @@
-import type { ContentBlock, Message, ToolResult, UserMessage, AssistantMessage } from '../types';
-import { escHtml } from '../utils/escHtml';
-import { redact } from '../utils/redact';
-import { md } from '../utils/markdown';
-import { getToolSummary, getToolCommand, isTaskTool } from '../parser/tool-summary';
-import { div, span } from '../utils/dom';
-import { TOOL_PREVIEW_MAX_LENGTH } from '../config';
+import type { ContentBlock, Message, ToolResult, UserMessage, AssistantMessage, IRenderer } from '../types';
 import { TaskManager } from './task-manager';
 import { ScrollManager } from './scroll-manager';
+import { UserRenderer } from './renderers/user-renderer';
+import { AssistantRenderer } from './renderers/assistant-renderer';
+import { ToolRenderer } from './renderers/tool-renderer';
 
-export class ChatRenderer {
+export class ChatRenderer implements IRenderer {
   private chatInner: HTMLElement;
   private scrollManager: ScrollManager;
-  private taskManager: TaskManager;
   private handleClick: (e: Event) => void;
+
+  private userRenderer: UserRenderer;
+  private assistantRenderer: AssistantRenderer;
+  private toolRenderer: ToolRenderer;
 
   constructor(chat: HTMLElement, chatInner: HTMLElement, taskManager: TaskManager, scrollManager?: ScrollManager) {
     this.chatInner = chatInner;
-    this.taskManager = taskManager;
     this.scrollManager = scrollManager || new ScrollManager(chat, chatInner);
 
+    // Sub-renderers (TASK-205)
+    this.toolRenderer = new ToolRenderer();
+    this.userRenderer = new UserRenderer();
+    this.assistantRenderer = new AssistantRenderer(this.toolRenderer, taskManager);
+
     // Event delegation for toggling open/closed on tool-call and tool-result elements.
-    // Replaces inline onclick handlers for CSP compliance.
     this.handleClick = (e: Event) => {
       const target = e.target as HTMLElement;
       const header = target.closest('.tool-call-header, .tool-call-expand, .tool-result-line, .tool-result-expand');
@@ -55,83 +58,24 @@ export class ChatRenderer {
   }
 
   renderToolCall(block: ContentBlock, target?: HTMLElement | DocumentFragment): void {
-    target = target || this.chatInner;
-    const summary = getToolSummary(block);
-    const command = getToolCommand(block);
-    const commandLines = command.split('\n');
-    const previewLine = commandLines[0].substring(0, TOOL_PREVIEW_MAX_LENGTH);
-    const extraLines = commandLines.length - 1;
-
-    const toolEl = div('tool-call');
-    toolEl.innerHTML = `
-      <div class="tool-call-header">
-        <span class="bullet">●</span>
-        <span class="tool-call-name">${escHtml(block.name || '')}</span><span class="tool-call-paren">(</span><span class="tool-call-summary">${escHtml(summary)}</span><span class="tool-call-paren">)</span>
-      </div>
-      <div class="tool-call-body"><pre>${escHtml(redact(previewLine))}</pre></div>
-      ${extraLines > 0 ? `<div class="tool-call-expand">… +${extraLines} lines (click to expand)</div>` : ''}
-    `;
-    target.appendChild(toolEl);
+    this.toolRenderer.renderToolCall(block, target || this.chatInner);
   }
 
   renderToolResult(result: ToolResult, target?: HTMLElement | DocumentFragment): void {
-    target = target || this.chatInner;
-    const resultText = result.stdout || result.content || '';
-    const stderrText = result.stderr || '';
-    const displayText = (resultText + (stderrText ? '\n' + stderrText : '')).trim();
-
-    if (!displayText) return;
-
-    const redacted = redact(displayText);
-    const resultLines = redacted.split('\n');
-    const previewText = resultLines[0].substring(0, TOOL_PREVIEW_MAX_LENGTH);
-    const moreLines = resultLines.length - 1;
-
-    const resultEl = div(`tool-result ${result.is_error ? 'error' : ''}`);
-    resultEl.innerHTML = `
-      <div class="tool-result-line">
-        <span class="tool-result-connector">└</span>
-        <span class="tool-result-preview">${escHtml(previewText)}</span>
-      </div>
-      ${moreLines > 0 ? `<div class="tool-result-expand">… +${moreLines} lines (click to expand)</div>` : ''}
-      <div class="tool-result-body"><pre>${escHtml(redacted)}</pre></div>
-    `;
-    target.appendChild(resultEl);
+    this.toolRenderer.renderToolResult(result, target || this.chatInner);
   }
 
   renderBlockInstant(block: ContentBlock, target?: HTMLElement | DocumentFragment): void {
-    target = target || this.chatInner;
-    if (block.type === 'text' && block.text) {
-      const el = div('assistant-block bullet-text');
-      el.innerHTML = '<span class="bullet">●</span>' + md(block.text);
-      target.appendChild(el);
-    } else if (block.type === 'tool_use') {
-      if (isTaskTool(block.name)) {
-        this.taskManager.handleTaskTool(block);
-      } else {
-        this.renderToolCall(block, target);
-        if (block.result) this.renderToolResult(block.result, target);
-      }
-    }
-    if (target === this.chatInner) this.autoScroll();
+    const t = target || this.chatInner;
+    this.assistantRenderer.renderBlock(block, t, t === this.chatInner ? () => this.autoScroll() : undefined);
   }
 
   renderUserInstant(msg: UserMessage, target?: HTMLElement | DocumentFragment): void {
-    target = target || this.chatInner;
-    const el = div('msg-user');
-    el.appendChild(span('user-prompt', '❯'));
-    el.appendChild(span('user-text', msg.text));
-    target.appendChild(el);
+    this.userRenderer.renderUser(msg, target || this.chatInner);
   }
 
   renderAssistantInstant(msg: AssistantMessage, target?: HTMLElement | DocumentFragment): void {
-    target = target || this.chatInner;
-    for (const block of msg.content) {
-      this.renderBlockInstant(block, target);
-    }
-    const statusEl = div('status-line');
-    statusEl.innerHTML = `<span class="status-icon">✱</span> Worked for 0s`;
-    target.appendChild(statusEl);
+    this.assistantRenderer.renderAssistant(msg, target || this.chatInner);
   }
 
   renderMessageInstant(msg: Message, target?: HTMLElement | DocumentFragment): void {
