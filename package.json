@@ -1,0 +1,31 @@
+{
+  "name": "claude-code-replay",
+  "version": "1.0.0",
+  "description": "Replay Claude Code conversations from JSONL logs, rendered to look exactly like the real Claude Code terminal.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SaintPepsi/claude-code-replay.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.3.5",
+    "jsdom": "^28.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.0.18"
+  }
+}

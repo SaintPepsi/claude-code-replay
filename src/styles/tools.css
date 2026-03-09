@@ -1,0 +1,110 @@
+/* Tool call — ● ToolName(summary) */
+.tool-call {
+  margin: 6px 0 2px 0;
+}
+
+.tool-call-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+
+.tool-call-header:hover { opacity: 0.85; }
+
+.tool-call-header .bullet {
+  color: var(--text-dim);
+  margin-right: 6px;
+}
+
+.tool-call-name {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+.tool-call-paren {
+  color: var(--text-dim);
+}
+
+.tool-call-summary {
+  color: var(--text);
+}
+
+.tool-call-body {
+  display: none;
+  margin-left: 20px;
+  padding: 4px 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.tool-call.open .tool-call-body { display: block; }
+
+.tool-call-expand {
+  margin-left: 20px;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tool-call.open .tool-call-expand { display: none; }
+
+/* Tool result — └ connector */
+.tool-result {
+  margin: 0 0 4px 0;
+}
+
+.tool-result-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  padding: 1px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-result-line:hover { opacity: 0.85; }
+
+.tool-result-connector {
+  color: var(--text-muted);
+  margin-right: 6px;
+  font-size: 12px;
+}
+
+.tool-result-preview {
+  color: var(--text-dim);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 80%;
+}
+
+.tool-result-body {
+  display: none;
+  margin-left: 20px;
+  padding: 4px 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.tool-result.open .tool-result-body { display: block; }
+
+.tool-result-expand {
+  margin-left: 20px;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tool-result.open .tool-result-expand { display: none; }
+
+.tool-result.error .tool-result-preview { color: var(--red); }

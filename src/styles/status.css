@@ -1,0 +1,45 @@
+/* Status line — ✱ Worked for Xm Xs */
+.status-line {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: 8px 0;
+  padding: 2px 0;
+}
+
+.status-line .status-icon {
+  color: var(--amber);
+  margin-right: 4px;
+}
+
+/* Typing cursor */
+.typing-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  background: var(--text);
+  animation: blink 0.6s step-end infinite;
+  vertical-align: text-bottom;
+  margin-left: 1px;
+}
+
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Status bar at bottom */
+#status-bar {
+  background: var(--bg-light);
+  border-top: 1px solid var(--border);
+  padding: 3px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.status-item { display: flex; align-items: center; gap: 4px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; }
+.status-dot.active { background: var(--green); }
+.status-dot.paused { background: var(--amber); }
+.status-dot.idle { background: var(--text-muted); }
+.status-spacer { flex: 1; }

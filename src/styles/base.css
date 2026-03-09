@@ -1,0 +1,12 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Menlo', 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

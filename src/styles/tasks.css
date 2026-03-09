@@ -1,0 +1,65 @@
+/* Task panel — pinned above chat */
+#task-panel {
+  display: none;
+  flex-shrink: 0;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+#task-panel.visible { display: block; }
+
+.task-list-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.task-list-header .task-header-icon {
+  color: var(--amber);
+}
+
+.task-list-header .task-header-text {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+.task-list-items {
+  margin-left: 14px;
+  border-left: 1px solid var(--border);
+  padding-left: 10px;
+}
+
+.task-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 0;
+}
+
+.task-item .task-check {
+  font-size: 12px;
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.task-item.pending .task-check { color: var(--white); }
+.task-item.in-progress .task-check { color: var(--amber); }
+.task-item.completed .task-check { color: var(--green); }
+
+.task-item.completed .task-subject {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.task-item.pending .task-subject { color: var(--white); }
+.task-item.in-progress .task-subject { color: var(--text); }
+
+.task-overflow {
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 2px 0;
+}
